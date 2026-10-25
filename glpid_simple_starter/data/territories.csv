@@ -1,0 +1,25 @@
+territory_id,name,territory_type,country_code,parent_territory_id,description,boundary_source_url
+fr,France,country,FR,,,État souverain
+fr-idf,Île-de-France,region,FR,fr,Région administrative française
+fr-la-defense,La Défense,district,FR,fr-idf,Quartier d'affaires non administratif associé à Courbevoie Puteaux et Nanterre; rattaché à l'Île-de-France pour le stockage mais ne constitue pas une juridiction fiscale
+us,United States,country,US,,,État fédéral
+us-ca,California,state,US,us,État fédéré américain
+us-silicon-valley,Silicon Valley,metropolitan_area,US,us-ca,Région économique informelle; définir le périmètre de l'étude; les comtés de Santa Clara et San Mateo sont fournis comme repères possibles
+gb,United Kingdom,country,GB,,,État souverain
+gb-eng,England,region,GB,gb,Subdivision géographique de référence
+gb-london,London,city,GB,gb-eng,Greater London; distinct du quartier de la City
+gb-city,City of London,district,GB,gb-london,Local government district and financial centre within Greater London; not a separate corporation-tax jurisdiction
+ie,Ireland,country,IE,,,Republic of Ireland; sovereign state
+ie-dublin,Dublin,city,IE,ie,City-level geography; use an explicitly documented boundary for metro-area analysis
+fr-92,Hauts-de-Seine,region,FR,fr-idf,French department containing Courbevoie Puteaux and Nanterre
+fr-courbevoie,Courbevoie,city,FR,fr-92,Commune associated with the La Défense business district
+fr-puteaux,Puteaux,city,FR,fr-92,Commune associated with the La Défense business district
+fr-nanterre,Nanterre,city,FR,fr-92,Commune associated with the La Défense business district
+fr-paris,Paris,city,FR,fr-idf,City and department; distinct from the La Défense business district
+us-santa-clara-county,Santa Clara County,region,US,us-ca,County-level comparison geography; not a definition of Silicon Valley
+us-san-mateo-county,San Mateo County,region,US,us-ca,County-level comparison geography; often included in broader Silicon Valley definitions
+us-san-jose,San Jose,city,US,us-santa-clara-county,Major city in Santa Clara County
+us-santa-clara-city,Santa Clara,city,US,us-santa-clara-county,City in Santa Clara County
+us-palo-alto,Palo Alto,city,US,us-santa-clara-county,City in Santa Clara County
+us-mountain-view,Mountain View,city,US,us-santa-clara-county,City in Santa Clara County
+us-redwood-city,Redwood City,city,US,us-san-mateo-county,City in San Mateo County
