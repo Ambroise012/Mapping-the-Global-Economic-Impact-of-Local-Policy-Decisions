@@ -90,6 +90,38 @@ Un test municipal peut être utile si la règle est ciblée et si l’on dispose
 
 Pour ces cas, privilégier les données d’établissement (emploi, salaires, ventes, permis, créations/fermetures) plutôt que le rendement de l’action. Ajouter les limites géographiques et une série temporelle couvrant plusieurs périodes avant et après la réforme.
 
+### Variables cibles et sources pour une entreprise multinationale
+
+L’unité pertinente est l’établissement, le salarié agrégé, le bail ou la filiale juridique locale, pas le groupe consolidé. Avant de choisir une politique, définir une variable mesurable, sa géographie, sa fréquence et une source documentée :
+
+| Résultat local à privilégier | Mesures possibles | Sources à examiner | Limites à documenter |
+|---|---|---|---|
+| Recrutement et réallocation des postes | Offres ouvertes par site, métier et tranche de salaire ; créations, suppressions et transferts de postes entre sites | Lightcast (ex-Burning Glass), Revelio Labs, Indeed | Couverture et licences variables ; annonces dupliquées ou non représentatives des embauches effectives |
+| Masse salariale et rémunérations | Effectifs, salaires bruts, bonus, entrées et sorties de personnel | DSN/DADS via CASD en France ; Census LBD/LEHD aux États-Unis | Accès soumis à autorisation et secret statistique ; privilégier les résultats agrégés et ne pas exporter de données personnelles |
+| Immobilier et capital physique | Surface occupée, ouvertures/fermetures de sites, baux renouvelés/résilés, permis, investissements et retards de projets | CoStar, CBRE, registres de permis ; DVF en France pour les transactions immobilières | Bases commerciales sous licence ; DVF renseigne les transactions, pas l’occupation ni les loyers |
+| Résultats de l’entité juridique locale | Chiffre d’affaires, résultat, EBITDA si publié, impôt payé par la filiale | INPI/Infogreffe, Companies House et registres nationaux | Comptes parfois abrégés, non comparables ou publiés avec retard ; distinguer filiale opérationnelle et société holding |
+| Activité physique et prix localisés | Fréquentation de sites ; frais ou prix géolocalisés, frais de livraison et de service | Placer.ai, SafeGraph ; tarifs publics et données de transaction autorisées | Données de mobilité souvent sous licence et sujettes à biais de couverture ; isoler le pass-through des autres changements de prix |
+
+Le schéma `company_indicators` permet de consigner des mesures documentées avec période, portée géographique et source, mais le projet ne collecte pas automatiquement ces bases. Vérifier leurs licences, leurs définitions et la disponibilité d’identifiants stables de site. Une valeur mondiale consolidée ne doit pas servir de substitut à un résultat local.
+
+### Plans causaux intra-entreprise et seuils
+
+Le script `scripts/local_causal_designs.py` fournit trois estimateurs exploratoires pour des CSV préparés à partir de données autorisées :
+
+1. **Sites d’une même firme (`within-firm`)** : compare les sites traités et témoins au sein de chaque firme et absorbe les chocs propres à la firme et à chaque période avec des effets fixes firme × période. Le CSV doit contenir `firm_id,location_id,period_start,treated,value`. Chaque firme doit avoir un site de chaque statut et un panel équilibré.
+2. **Exposition continue (`continuous-did`)** : estime l’interaction entre une part d’exposition locale mesurée avant la réforme et la période post. Le CSV doit contenir `company_id,period_start,exposure,value`, avec `exposure` dans [0,1] et constant pour chaque entreprise. Le coefficient représente le changement d’issue associé à une hausse de l’exposition de 0 à 1 ; une hausse de 10 points correspond à un dixième de ce coefficient.
+3. **RDD sharp (`rdd`)** : estime le saut local de résultat au seuil légal à partir de `running,value`, où `running` est la variable d’assignation (par exemple la rémunération) et `--cutoff` le seuil vérifié. La régression est locale, linéaire et pondérée par un noyau triangulaire. Le minimum par défaut de 20 observations de chaque côté est un garde-fou logiciel, pas une justification de puissance statistique ni une preuve de validité. Le script ne couvre pas une RDD fuzzy lorsque le franchissement du seuil ne détermine pas directement le traitement.
+
+Exemples PowerShell (adapter les chemins, dates, seuils et unités aux données vérifiées) :
+
+```powershell
+python scripts/local_causal_designs.py --design within-firm --input data\local_cases\policy\within_firm.csv --post-date 2021-01-01
+python scripts/local_causal_designs.py --design continuous-did --input data\local_cases\policy\exposure_panel.csv --post-date 2021-01-01
+python scripts/local_causal_designs.py --design rdd --input data\local_cases\policy\threshold.csv --cutoff 150000 --bandwidth 30000
+```
+
+Le RDD n’est pertinent que si le texte crée une assignation ou une intensité de traitement discontinue au seuil. Vérifier le seuil effectif, l’éligibilité de l’employeur, les possibilités de manipulation ou de tri autour du seuil, la densité et les covariables, et rapporter plusieurs bandes passantes. Les erreurs-types clusterisées dans les deux DiD sont fragiles lorsque le nombre de firmes ou de sites est faible. Ces scripts n’importent ni ne téléchargent les CSV et leurs résultats restent descriptifs sans hypothèses et tests de robustesse crédibles.
+
 #### Cas locaux concrets à prioriser
 
 | Priorité | Juridiction et mesure candidate | Date(s) à tester | Population directement exposée | Résultat local à privilégier | Points de vigilance |

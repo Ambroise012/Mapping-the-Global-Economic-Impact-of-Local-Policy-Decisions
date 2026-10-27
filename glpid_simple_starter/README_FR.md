@@ -224,5 +224,30 @@ python scripts/fetch_gdelt_context.py --start-date 2019-01-01 --end-date 2022-12
 
 Cette série ne mesure ni l’emploi ni l’impact causal. L’API a renvoyé HTTP 429 lors de la collecte de ce projet ; en cas de 429, attendre avant de réessayer et ne pas lancer de boucles de requêtes. Aucune donnée GDELT n’a pour l’instant été importée dans la base.
 
+## 11. Résultats locaux et plans causaux
+
+Pour les multinationales, privilégiez les résultats décidés localement : offres d’emploi par site, effectifs et rémunérations, surface et baux, permis/investissements, comptes de la filiale locale et prix ou frais géolocalisés. Les sources possibles incluent Lightcast/Revelio Labs/Indeed, DSN/DADS via CASD, Census LBD/LEHD, CoStar/CBRE, DVF, Placer.ai/SafeGraph et les registres nationaux de comptes. Elles peuvent être payantes, soumises à licence ou à accès sécurisé ; le projet ne les télécharge pas. Documentez la source, la couverture, la période, le site et l’entité juridique. Les données administratives individuelles doivent rester dans leur environnement autorisé et être agrégées conformément aux règles de confidentialité.
+
+Le script `scripts/local_causal_designs.py` estime trois modèles à partir d’un CSV local :
+
+```powershell
+# Même firme, sites traités et témoins, avec effets fixes firme × période
+python scripts/local_causal_designs.py --design within-firm --input data\local_cases\policy\within_firm.csv --post-date 2021-01-01
+
+# DiD avec une exposition locale pré-réforme continue comprise entre 0 et 1
+python scripts/local_causal_designs.py --design continuous-did --input data\local_cases\policy\exposure_panel.csv --post-date 2021-01-01
+
+# RDD local au seuil légal documenté
+python scripts/local_causal_designs.py --design rdd --input data\local_cases\policy\threshold.csv --cutoff 150000 --bandwidth 30000
+```
+
+Formats attendus :
+
+- `within-firm` : `firm_id,location_id,period_start,treated,value` ; au moins un site traité et un site témoin par firme, mêmes périodes observées pour chaque site.
+- `continuous-did` : `company_id,period_start,exposure,value` ; exposition pré-réforme fixe par entreprise, normalisée entre 0 et 1.
+- `rdd` : `running,value` ; `running` est la variable d’assignation (par exemple le salaire) et `--cutoff` doit provenir de la règle vérifiée. Le script ne prend en charge qu’une RDD sharp, avec régression locale linéaire à noyau triangulaire et au moins 20 observations de chaque côté par défaut ; il ne convient pas à une assignation imparfaite (RDD fuzzy).
+
+Les DiD utilisent des erreurs-types regroupées au niveau du site ou de l’entreprise ; elles sont fragiles avec peu de groupes. Le RDD suppose une vraie discontinuité de traitement au seuil et exige des vérifications de manipulation, de densité, de covariables et de robustesse à la bande passante. Le script ne télécharge ni n’importe les données ; il ne valide pas les sources ou la légalité des seuils indiqués. Interprétez ses estimations comme exploratoires.
+
 ## Limites
-Cette version ne collecte pas automatiquement les sources. Le script DiD produit une estimation conditionnelle aux données fournies, mais n’établit pas à lui seul un effet causal. Les comptes consolidés mondiaux ne mesurent pas directement les effets locaux. Conservez une URL, un périmètre et une période pour chaque donnée. Une valeur inconnue doit rester vide, jamais être inventée.
+Cette version ne collecte pas automatiquement les sources. Les scripts produisent des estimations conditionnelles aux données fournies, mais n’établissent pas à eux seuls un effet causal. Les comptes consolidés mondiaux ne mesurent pas directement les effets locaux. Conservez une URL, un périmètre et une période pour chaque donnée. Une valeur inconnue doit rester vide, jamais être inventée.
