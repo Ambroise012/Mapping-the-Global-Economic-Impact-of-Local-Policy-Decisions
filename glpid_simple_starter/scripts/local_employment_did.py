@@ -238,8 +238,8 @@ def main():
     percent_low = 100 * (math.exp(conf_low) - 1)
     percent_high = 100 * (math.exp(conf_high) - 1)
     print(f"Indicateur : {indicator_label} ({unit}), échelle logarithmique")
-    print(f"Territoire traité proxy : {args.treated_id}")
-    print(f"Comtés témoins : {', '.join(args.control_ids)}")
+    print(f"Territoire traité : {args.treated_id}")
+    print(f"Territoires témoins : {', '.join(args.control_ids)}")
     print(
         f"Période : {quarter_label(args.start_quarter)} à {quarter_label(args.end_quarter)} ; "
         f"après = à partir de {quarter_label(args.post_quarter)}"
@@ -265,11 +265,10 @@ def main():
             f"{pretrend[0]:.6f} par trimestre (p={pretrend[1]:.4f})."
         )
     print(
-        "Interprétation prudente : estimation exploratoire sur King County, non sur Seattle. "
-        f"Les erreurs clusterisées reposent sur {frame['territory_id'].nunique()} comtés; "
-        "l’inférence est fragile avec peu de grappes. "
-        "La pandémie, les retombées vers les comtés voisins et les différences locales "
-        "empêchent d’attribuer directement le résultat à la taxe."
+        "Interprétation prudente : estimation exploratoire, pas une preuve causale. "
+        f"Les erreurs clusterisées reposent sur {frame['territory_id'].nunique()} territoires; "
+        "l'inférence est fragile avec peu de grappes. Les chocs concurrents, les retombées "
+        "entre territoires et leurs différences structurelles peuvent biaiser l'estimation."
     )
 
 

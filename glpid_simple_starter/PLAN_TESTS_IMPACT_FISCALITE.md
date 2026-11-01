@@ -122,6 +122,8 @@ python scripts/local_causal_designs.py --design rdd --input data\local_cases\pol
 
 Le RDD n’est pertinent que si le texte crée une assignation ou une intensité de traitement discontinue au seuil. Vérifier le seuil effectif, l’éligibilité de l’employeur, les possibilités de manipulation ou de tri autour du seuil, la densité et les covariables, et rapporter plusieurs bandes passantes. Les erreurs-types clusterisées dans les deux DiD sont fragiles lorsque le nombre de firmes ou de sites est faible. Ces scripts n’importent ni ne téléchargent les CSV et leurs résultats restent descriptifs sans hypothèses et tests de robustesse crédibles.
 
+D’autres cas empiriques (taxe foncière commerciale en Ontario, impôts sur les sociétés des États américains et Pittsburgh) et leurs gabarits de commandes sont présentés dans [Autres cas et commandes de reproduction](./AUTRES_CAS_ET_COMMANDES_REPRODUCTION.md). Les panels nécessaires à ces nouveaux cas ne sont pas inclus dans le dépôt.
+
 #### Cas locaux concrets à prioriser
 
 | Priorité | Juridiction et mesure candidate | Date(s) à tester | Population directement exposée | Résultat local à privilégier | Points de vigilance |
@@ -162,32 +164,81 @@ Le script `scripts/causal_event_study.py` exige :
 
 Pour une réforme d’État ou de ville, rattacher également les entreprises témoins au territoire de la réforme étudiée, tout en documentant que leur exposition à cette règle locale est faible. Ne pas utiliser les seuils de score comme substitut à une justification empirique : ils sont des critères techniques de classement, pas des seuils universels.
 
-## Commandes de reproduction des tests boursiers déjà configurés
+## Commandes pour obtenir des résultats sur plusieurs cas
 
-Depuis `glpid_simple_starter` :
+Ces commandes affichent des **CAR boursiers par société**, comparés à un indice de marché, autour des dates des réformes. C’est une mesure de la réaction des marchés pour des entreprises candidates ayant des activités mondiales ; ce n’est ni une mesure de l’impact économique mondial total, ni une preuve que la taxe locale a causé le mouvement. Pour mesurer des effets locaux, utiliser les commandes Seattle et les modèles sur CSV décrits plus bas.
+
+### Préparer l’environnement (PowerShell)
+
+Ouvrir PowerShell et exécuter :
 
 ```powershell
-# États-Unis fédéral
-python scripts/fetch_event_data.py --case us
-python scripts/event_study.py --policy-id policy-us-tcja-corporate-rate --event-column adoption_date --window-days 5 --index-name "^GSPC"
-
-# Pennsylvanie
-python scripts/fetch_event_data.py --case pa
-python scripts/event_study.py --policy-id policy-pa-corporate-rate-2023 --event-column adoption_date --window-days 5 --index-name "^GSPC"
-python scripts/event_study.py --policy-id policy-pa-corporate-rate-2023 --event-column effective_date --window-days 5 --index-name "^GSPC"
-
-# État de New York
-python scripts/fetch_event_data.py --case ny
-python scripts/event_study.py --policy-id policy-ny-corporate-surcharge-2021 --event-column adoption_date --window-days 5 --index-name "^GSPC"
-python scripts/event_study.py --policy-id policy-ny-corporate-surcharge-2021 --event-column effective_date --window-days 5 --index-name "^GSPC"
-
-# France
-python scripts/fetch_event_data.py --case fr
-python scripts/event_study.py --policy-id policy-fr-corporate-rate-25-2022 --event-column adoption_date --window-days 5 --index-name "^FCHI"
-python scripts/event_study.py --policy-id policy-fr-corporate-rate-25-2022 --event-column effective_date --window-days 5 --index-name "^FCHI"
+Set-Location "C:\Users\ambro\Desktop\Mapping-the-Global-Economic-Impact-of-Local-Policy-Decisions\glpid_simple_starter"
+.\.venv\Scripts\Activate.ps1
 ```
 
-Les commandes rechargent les cours pour la période par défaut de chaque cas ; une connexion Internet est nécessaire. Les conditions du fournisseur de données s’appliquent.
+Il faut que PostgreSQL soit démarré, que la base et les paramètres de connexion soient configurés dans `.env`, et que les dépendances soient installées. Si l’environnement ou le schéma n’a pas encore été préparé, suivre les étapes d’installation du `README_FR.md`, puis appliquer le schéma :
+
+```powershell
+python -m pip install -r requirements.txt
+psql -U postgres -d glpid -f sql\001_schema.sql
+psql -U postgres -d glpid -f sql\002_views.sql
+python scripts\import_csv.py data\templates\sources.csv sources
+python scripts\import_csv.py data\territories.csv territories
+python scripts\import_csv.py data\templates\policy_changes.csv policy_changes
+```
+
+Les trois imports CSV sont à faire une seule fois sur une base vide (ou après l’application du schéma) ; ils chargent les sources, territoires et réformes de référence dont les cas `us`, `uk` et `ie` ont besoin. Ne pas partager le fichier `.env`. Si l’environnement virtuel est déjà activé et la base préparée, ne réinstallez pas les dépendances et ne réimportez pas ces fichiers à chaque exécution.
+
+### 1. Télécharger les données pour tous les cas boursiers configurés
+
+Les cas configurés sont États-Unis fédéral (`us`), Royaume-Uni (`uk`), Irlande/Pillar Two (`ie`), Pennsylvanie (`pa`), État de New York (`ny`) et France (`fr`). La boucle PowerShell ci-dessous télécharge les cours et les enregistre dans PostgreSQL :
+
+```powershell
+foreach ($case in @("us", "uk", "ie", "pa", "ny", "fr")) {
+    python scripts\fetch_event_data.py --case $case
+}
+
+# Le téléchargement par défaut du Royaume-Uni s’arrête en 2021.
+# Recharger jusqu’en 2023 pour pouvoir analyser l’entrée en vigueur.
+python scripts\fetch_event_data.py --case uk --start-date 2020-10-01 --end-date 2023-06-30
+```
+
+Il faut une connexion Internet. La collecte peut prendre du temps et dépend des conditions d’accès actuelles de Yahoo Finance. On peut aussi télécharger un seul cas, par exemple `python scripts\fetch_event_data.py --case pa`. Les données sont réimportées/mises à jour si la commande est relancée.
+
+### 2. Afficher les résultats événementiels des six cas
+
+Exécuter les commandes après le téléchargement. Chaque appel imprime le CAR pour chaque société candidate et son nombre d’observations. Les fenêtres sont en **jours calendaires** ; pour des fenêtres en séances et une analyse DiD, voir la section suivante.
+
+```powershell
+# États-Unis fédéral — TCJA ; indice S&P 500
+python scripts\event_study.py --policy-id policy-us-tcja-corporate-rate --event-column adoption_date --window-days 5 --index-name "^GSPC"
+python scripts\event_study.py --policy-id policy-us-tcja-corporate-rate --event-column effective_date --window-days 5 --index-name "^GSPC"
+
+# Royaume-Uni — taux de corporation tax ; indice FTSE 100
+python scripts\event_study.py --policy-id policy-uk-corporation-tax-2023 --event-column announcement_date --window-days 5 --index-name "^FTSE"
+python scripts\event_study.py --policy-id policy-uk-corporation-tax-2023 --event-column effective_date --window-days 5 --index-name "^FTSE"
+
+# Irlande — mise en œuvre de Pillar Two ; indice ISEQ
+python scripts\event_study.py --policy-id policy-ie-pillar-two --event-column adoption_date --window-days 5 --index-name "^ISEQ"
+python scripts\event_study.py --policy-id policy-ie-pillar-two --event-column effective_date --window-days 5 --index-name "^ISEQ"
+
+# Pennsylvanie — première baisse du taux de l’impôt sur les sociétés ; S&P 500
+python scripts\event_study.py --policy-id policy-pa-corporate-rate-2023 --event-column adoption_date --window-days 5 --index-name "^GSPC"
+python scripts\event_study.py --policy-id policy-pa-corporate-rate-2023 --event-column effective_date --window-days 5 --index-name "^GSPC"
+
+# État de New York — surtaxe temporaire ; S&P 500
+python scripts\event_study.py --policy-id policy-ny-corporate-surcharge-2021 --event-column adoption_date --window-days 5 --index-name "^GSPC"
+python scripts\event_study.py --policy-id policy-ny-corporate-surcharge-2021 --event-column effective_date --window-days 5 --index-name "^GSPC"
+
+# France — taux normal d’IS à 25 % ; CAC 40
+python scripts\event_study.py --policy-id policy-fr-corporate-rate-25-2022 --event-column adoption_date --window-days 5 --index-name "^FCHI"
+python scripts\event_study.py --policy-id policy-fr-corporate-rate-25-2022 --event-column effective_date --window-days 5 --index-name "^FCHI"
+```
+
+Une commande n’affiche pas une conclusion économique « globale » : elle fournit des rendements anormaux autour d’une date pour les sociétés et l’indice disponibles. Les sociétés importées sont des candidates basées notamment sur leur siège ; leurs scores d’exposition fiscale sont vides et ne valident pas leur assujettissement. Pour une estimation causale, documenter l’exposition avant la réforme, ajouter des témoins crédibles et utiliser la DiD seulement lorsque ses prérequis sont remplis. Les dates d’annonce, d’adoption et d’effet peuvent représenter des événements différents ; comparer les résultats avec prudence.
+
+Si une commande répond qu’une politique ou des données sont introuvables, vérifier d’abord que le téléchargement du cas correspondant a terminé avec succès et que la base configurée dans `.env` est celle à laquelle le schéma a été appliqué.
 
 ## Commandes pour tester des cas locaux (États, villes et EPCI)
 
@@ -226,6 +277,8 @@ Les sociétés chargées automatiquement ont un score d’exposition vide et ne 
 ### Villes américaines : Seattle et San Francisco
 
 Pour **Seattle**, une analyse exploratoire de l’emploi est désormais disponible avec les données trimestrielles officielles QCEW du Bureau of Labor Statistics. Le niveau public est le **comté**, pas la ville : King County sert donc de proxy imparfait de Seattle. Le script télécharge et enregistre directement les séries de King County et de cinq comtés témoins dans `territory_indicators` ; il ne faut pas remplir ni importer les CSV boursiers vides de Seattle pour lancer cette analyse.
+
+Les résultats effectivement exécutés, les tests de pré-tendance, la sensibilité au choix des témoins et les commandes de reproduction sont présentés dans [l’étude exploratoire JumpStart de Seattle](./ETUDE_CAUSALE_JUMPSTART_SEATTLE_2026-10-31.md). L’analyse ne démontre pas de causalité avec les données agrégées disponibles.
 
 Depuis PowerShell, dans `glpid_simple_starter`, avec `.env` et le schéma appliqué :
 
@@ -321,6 +374,24 @@ python scripts/import_csv.py data\local_cases\cfe\company_indicators.csv company
 `territory_indicators.csv` doit suivre les colonnes du chargeur `territory_indicators` dans `scripts/import_csv.py` (`territory_indicator_id`, `territory_id`, `indicator_code`, `period_start`, `period_end`, `value`, `unit`, `geographic_scope`, `source_id`, `source_page`, `notes`). `company_indicators.csv` doit suivre le gabarit correspondant dans `data\templates`. Les commandes d’import sont donc des commandes à exécuter après collecte et création des fichiers, et non une procédure immédiatement exécutable avec le contenu actuel du dépôt.
 
 **Il n’existe pas encore de script qui estime une différence-en-différences sur ces indicateurs territoriaux annuels.** L’import les stocke dans PostgreSQL, mais `causal_event_study.py` n’analyse que des rendements boursiers quotidiens. Ne pas lancer ce dernier pour conclure sur l’effet de la CFE ; il faudra d’abord construire un panel documenté de territoires traités et témoins et un estimateur adapté à ces indicateurs. Harmoniser également les périmètres communaux/EPCI sur toute la période.
+
+## Nouvelle étude reproductible : Pennsylvanie et États voisins (QCEW)
+
+Le collecteur `scripts/fetch_qcew_state_tax_panel.py` enregistre dans PostgreSQL les séries trimestrielles 2015–2025 d’emploi privé moyen et de salaire hebdomadaire moyen pour la Pennsylvanie (`us-pa`) et six témoins voisins (`us-de`, `us-md`, `us-nj`, `us-ny`, `us-oh`, `us-wv`). Il enregistre également l’Act 53 de 2022 et les taux statutaires annuels 2022–2025. Le panel contient 616 observations QCEW complètes.
+
+Depuis PowerShell, dans `glpid_simple_starter` et avec l’environnement virtuel activé :
+
+```powershell
+python scripts\fetch_qcew_state_tax_panel.py --start-year 2015 --end-year 2025
+python scripts\local_employment_did.py --indicator employment --treated-id us-pa --control-ids us-de us-md us-nj us-ny us-oh us-wv --post-quarter 2023-Q1 --adoption-quarter 2022-Q3 --start-quarter 2015-Q1 --end-quarter 2025-Q4
+python scripts\local_employment_did.py --indicator weekly-wage --treated-id us-pa --control-ids us-de us-md us-nj us-ny us-oh us-wv --post-quarter 2023-Q1 --adoption-quarter 2022-Q3 --start-quarter 2015-Q1 --end-quarter 2025-Q4
+
+# Placebos entièrement antérieurs à l’adoption
+python scripts\local_employment_did.py --indicator employment --treated-id us-pa --control-ids us-de us-md us-nj us-ny us-oh us-wv --post-quarter 2018-Q1 --adoption-quarter 2018-Q1 --start-quarter 2015-Q1 --end-quarter 2021-Q4
+python scripts\local_employment_did.py --indicator weekly-wage --treated-id us-pa --control-ids us-de us-md us-nj us-ny us-oh us-wv --post-quarter 2018-Q1 --adoption-quarter 2018-Q1 --start-quarter 2015-Q1 --end-quarter 2021-Q4
+```
+
+Le résultat est exploratoire : la DiD estimée est de −0,34 % pour l’emploi (p=0,7336) et de +0,22 % pour le salaire moyen (p=0,7188), avec des intervalles de confiance couvrant zéro. Les résultats, commandes, placebos, sources et limites d’identification sont documentés dans [l’étude Pennsylvanie](./ETUDE_CAUSALE_PENNSYLVANIE_QCEW_2026-10-31.md). Les données QCEW par État ne permettent pas d’attribuer l’effet à une entreprise ni de mesurer son impact global.
 
 ## Sources et intégrité des données
 

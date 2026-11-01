@@ -3,6 +3,8 @@
 ## Objectif
 Base de recherche pour relier des changements de fiscalité/réglementation dans un territoire aux évolutions des entreprises qui y sont implantées. Cette version est volontairement simple : PostgreSQL, cinq tables, CSV et un script d'import. Elle ne télécharge pas automatiquement les lois ou rapports annuels.
 
+Pour un inventaire de l’état actuel de la base, de son schéma, de ses sources collectées et de leurs périodes de couverture, consultez [STRUCTURE_BASE_DONNEES_FR.md](STRUCTURE_BASE_DONNEES_FR.md).
+
 ## 1. Installer
 Installez PostgreSQL (https://www.postgresql.org/download/windows/) et Python 3.11+ (https://www.python.org/downloads/windows/). Ouvrez PowerShell et vérifiez `python --version` et `psql --version`.
 
@@ -80,7 +82,60 @@ Le catalogue `sources.csv` référence des sources, pas les jeux de données eux
 
 Vérifiez les licences, les conditions d'accès, les limites d'API et la couverture avant toute collecte. Une source répertoriée ne signifie pas que ses données ont été téléchargées, ni qu'elles sont toutes gratuites ou ouvertes. Les sources agrégées comme les statistiques CbCR ne fournissent pas nécessairement de données au niveau d'une entreprise.
 
-## 8. Vérifier
+### Charger l'emploi national trimestriel Eurostat
+
+Avec PostgreSQL lancé, le schéma créé et `.env` configuré, exécutez depuis `glpid_simple_starter` :
+
+```powershell
+.\.venv\Scripts\python.exe scripts\fetch_eurostat_employment_panel.py
+```
+
+Le script télécharge via l'API officielle Eurostat le panel `lfsi_emp_q` : emploi total, deux sexes, 15–74 ans, CVS, en milliers de personnes, de 2014-T1 à 2025-T4 pour les pays où Eurostat publie la série. Il ajoute aussi les séries nationales officielles pour les autres réformes : ONS LFS PWT24 pour le Royaume-Uni (emploi CVS des 16 ans et plus, 2019-T1 à 2025-T1) et BLS CPS `LNS12000000` pour les États-Unis (moyenne trimestrielle des niveaux mensuels CVS des 16 ans et plus, 2014-T1 à 2025-T3). Le T4 2025 américain est omis parce que l'estimation mensuelle d'octobre n'est pas publiée ; aucune moyenne trimestrielle partielle n'est calculée. L'import vérifié a ajouté 840 observations sur 18 pays (16 séries Eurostat, une ONS et une BLS). Les périmètres et les sources sont détaillés dans chaque enregistrement. Les données Eurostat manquantes sont détectées et ne sont pas imputées. Pour une autre fenêtre, indiquez par exemple `--start-quarter 2016-Q1 --end-quarter 2025-Q4`. La plage demandée doit être couverte par les sources ; le script échoue explicitement si une série est incomplète.
+
+Ces données ajoutent des résultats nationaux pour les réformes française, irlandaise, britannique et fédérale américaine, ainsi que des comparateurs Eurostat. Elles rendent les réformes sélectionnables avec des panneaux temporels, mais ne mesurent pas l'emploi des seules entreprises assujetties. Les définitions d'âge diffèrent légèrement (Eurostat 15–74 ans, ONS/BLS 16 ans et plus) et l'Irlande comme les pays comparateurs ont été exposés au Pilier Deux : ces données ne constituent pas automatiquement des groupes témoins non traités. Les estimations restent exploratoires et ne suffisent pas à attribuer un effet causal à la réforme.
+
+## 8. Explorer la base avec le tableau de bord
+
+Le tableau de bord Streamlit fournit une vue d'ensemble des politiques, territoires, sources, indicateurs et entreprises. Dans **Sources et données**, chaque source est reliée aux enregistrements qui la citent : politiques, indicateurs (code, unité, portée, territoire et période), expositions ou cours boursiers. Une source sans données associées est signalée comme référence de catalogue uniquement. Les requêtes à PostgreSQL sont exécutées en lecture seule.
+
+L'onglet **Tester un effet causal** affiche toutes les réformes enregistrées, même lorsqu'aucun résultat économique n'est encore disponible. Le libellé indique si un panel trimestriel est un candidat à l'analyse ou si des résultats doivent être chargés. Pour les réformes sans panel, le tableau de bord propose une fenêtre trimestrielle indicative (8 trimestres avant et après les dates légales) et permet de modifier ses bornes ; ces dates ne signifient pas que les données existent. La couverture actuelle du territoire, les sources et les dates légales sont alors affichées pour préparer la collecte.
+
+Les panneaux trimestriels candidats comprennent QCEW pour la Pennsylvanie et New York, des séries d'emploi nationales Eurostat/ONS/BLS pour la France, l'Irlande, le Royaume-Uni et les États-Unis, ainsi que Seattle avec une limite importante : les données de King County servent de proxy et incluent des zones non soumises à la taxe municipale. L'interface le signale explicitement ; ce résultat n'est pas une mesure directe de Seattle. Les séries nationales sont des résultats agrégés, non des résultats propres aux multinationales, et leurs définitions ne sont pas parfaitement identiques entre pays. Pour une réforme dont la date d'entrée en vigueur précède l'adoption formelle (surtaxe de New York, rétroactive au 1er janvier 2021), le trimestre d'analyse par défaut suit l'entrée en vigueur ; les dates légales originales restent visibles.
+
+### Cas d'étude documenté : taxe sur les boissons de Philadelphia
+
+Depuis `glpid_simple_starter`, avec PostgreSQL, le schéma et `.env` configurés, ajoutez ou mettez à jour ce cas ainsi que les valeurs rapportées dans l'étude publiée :
+
+```powershell
+.\.venv\Scripts\python.exe scripts\import_philadelphia_beverage_tax_case.py
+```
+
+Le script est idempotent. Il enregistre la taxe de 1,5 cent par once (en vigueur le 1er janvier 2017), les sources officielles et académiques, Philadelphia, Baltimore et la zone des codes postaux limitrophes, puis les prix, volumes et estimations différence-en-différences publiés par l'étude JAMA de 2019. Le tableau de bord affiche séparément les estimations publiées lorsqu'on sélectionne cette réforme.
+
+Ces nombres proviennent de l'article, pas d'une nouvelle estimation GLPID. Les données brutes de caisse IRI ne sont pas ouvertes ; l'étude porte sur 291 magasins et couvre environ 25 % des onces de boissons taxées vendues à Philadelphia. Les observations annuelles 2016–2017 sont des résultats publiés, ne forment pas le panel trimestriel requis pour relancer la DiD dans l'application, et ne démontrent pas à elles seules un effet sur l'emploi ou l'économie mondiale. Voir [ETUDE_CAUSALE_TAXE_BOISSONS_PHILADELPHIE.md](ETUDE_CAUSALE_TAXE_BOISSONS_PHILADELPHIE.md) pour les résultats, limites et commandes de vérification.
+
+Pour vérifier l'import :
+
+```powershell
+psql -U postgres -d glpid -c "SELECT policy_id, title, effective_date FROM policy_changes WHERE policy_id = 'policy-philadelphia-beverage-tax-2017';"
+psql -U postgres -d glpid -c "SELECT indicator_code, period_start, value, unit, notes FROM territory_indicators WHERE indicator_code LIKE 'pbt_published_did_%' ORDER BY indicator_code;"
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_import_philadelphia_beverage_tax_case.py"
+.\.venv\Scripts\python.exe -m streamlit run dashboard.py
+```
+
+Quand un panel est disponible, les témoins proposés sont ceux ayant le même indicateur, la même unité et la même portée géographique. Le tableau de bord contrôle ensuite que le panel est équilibré, sans valeur manquante, et qu'il y a au moins 8 trimestres communs de chaque côté. Il montre les sources rattachées aux observations, puis l'estimation, son intervalle de confiance, sa p-valeur, une pré-tendance et une courbe indexée. La complétude ne valide pas les hypothèses causales ; les résultats et le choix des témoins doivent être interprétés avec prudence, surtout avec peu de territoires.
+
+La carte géographique n'est pas activée : le schéma actuel décrit les territoires et leurs relations, mais ne stocke pas encore de géométries.
+
+Après installation ou mise à jour des dépendances (`pip install -r requirements.txt`), depuis le dossier `glpid_simple_starter` et avec `.env` configuré :
+
+```powershell
+streamlit run dashboard.py
+```
+
+Le navigateur s'ouvre sur le tableau de bord. Pour arrêter le serveur, utilisez `Ctrl+C` dans PowerShell. Les résultats sont descriptifs ; les graphiques ne démontrent pas à eux seuls un lien causal.
+
+## 9. Vérifier
 ```powershell
 psql -U postgres -d glpid
 ```
@@ -93,7 +148,7 @@ SELECT * FROM v_territory_indicators ORDER BY territory, indicator_code;
 \q
 ```
 
-## 9. Méthode de recherche conseillée
+## 10. Méthode de recherche conseillée
 1. Trouver une réforme et son texte officiel.
 2. Enregistrer la source officielle dans `sources`.
 3. Enregistrer séparément date d'annonce, adoption et entrée en vigueur.
@@ -105,7 +160,7 @@ SELECT * FROM v_territory_indicators ORDER BY territory, indicator_code;
 ## Sources de départ
 Le catalogue et les liens des sources évoquées sont dans `data/templates/sources.csv`. Pour des sources supplémentaires, notamment INSEE / Sirene, Eurostat, Federal Register et Irish Statute Book, vérifiez leurs documentations officielles avant de les ajouter.
 
-## 10. Tester un effet d’événement (courant boursier / juridiction)
+## 11. Tester un effet d’événement (courant boursier / juridiction)
 
 Pour analyser si un changement de juridiction a des effets sur un cours boursier, il faut enregistrer :
 - la réforme dans `policy_changes` ;
