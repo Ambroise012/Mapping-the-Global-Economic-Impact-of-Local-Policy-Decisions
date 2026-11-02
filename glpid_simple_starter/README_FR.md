@@ -73,8 +73,9 @@ python scripts/import_csv.py data/templates/policy_changes.csv policy_changes
 python scripts/import_csv.py data/territory_indicators.csv territory_indicators
 python scripts/import_csv.py data/templates/companies.csv companies
 python scripts/import_csv.py data/templates/company_indicators.csv company_indicators
+python scripts/import_csv.py data/templates/company_exposures.csv company_exposures
 ```
-Le script importe ou met à jour les lignes à partir de leur identifiant. Les exemples d'entreprises et d'indicateurs d'entreprises restent vides : ne les importez pas tant qu'ils ne contiennent pas vos données.
+Le script importe ou met à jour les lignes à partir de leur identifiant. Le modèle d’indicateurs d’entreprise reste vide tant qu’aucune mesure locale n’est sourcée. Le catalogue des entreprises comprend aussi Amazon et Equinix comme candidats pour Loudoun ; leurs expositions régionales restent à vérifier au niveau du site.
 
 `territory_indicators` stocke les variables fiscales et macroéconomiques attachées à un territoire et à une période, indépendamment d'une entreprise. Les indicateurs 2024 sont des taux légaux de référence, pas des taux effectifs payés par une entreprise. Les règles fiscales comportent seuils, exonérations, surtaxes et critères d'éligibilité ; les notes et liens officiels en précisent certaines limites. Ne combinez pas mécaniquement les taux fédéral et californien.
 
@@ -96,7 +97,7 @@ Ces données ajoutent des résultats nationaux pour les réformes française, ir
 
 ## 8. Explorer la base avec le tableau de bord
 
-Le tableau de bord Streamlit fournit une vue d'ensemble des politiques, territoires, sources, indicateurs et entreprises. Dans **Sources et données**, chaque source est reliée aux enregistrements qui la citent : politiques, indicateurs (code, unité, portée, territoire et période), expositions ou cours boursiers. Une source sans données associées est signalée comme référence de catalogue uniquement. Les requêtes à PostgreSQL sont exécutées en lecture seule.
+Le tableau de bord Streamlit fournit une vue d'ensemble des politiques, territoires, sources, indicateurs et entreprises. Le nouvel onglet **Data Center Alley** réunit le cas de Loudoun, les séries QCEW (emploi/salaires), les cours AMZN/EQIX et l’attention GDELT lorsqu’ils sont chargés, ainsi que les limites de mesure. Dans **Sources et données**, chaque source est reliée aux enregistrements qui la citent : politiques, indicateurs (code, unité, portée, territoire et période), expositions ou cours boursiers. Une source sans données associées est signalée comme référence de catalogue uniquement. Les requêtes à PostgreSQL sont exécutées en lecture seule.
 
 L'onglet **Tester un effet causal** affiche toutes les réformes enregistrées, même lorsqu'aucun résultat économique n'est encore disponible. Le libellé indique si un panel trimestriel est un candidat à l'analyse ou si des résultats doivent être chargés. Pour les réformes sans panel, le tableau de bord propose une fenêtre trimestrielle indicative (8 trimestres avant et après les dates légales) et permet de modifier ses bornes ; ces dates ne signifient pas que les données existent. La couverture actuelle du territoire, les sources et les dates légales sont alors affichées pour préparer la collecte.
 
@@ -124,6 +125,42 @@ psql -U postgres -d glpid -c "SELECT indicator_code, period_start, value, unit, 
 ```
 
 Quand un panel est disponible, les témoins proposés sont ceux ayant le même indicateur, la même unité et la même portée géographique. Le tableau de bord contrôle ensuite que le panel est équilibré, sans valeur manquante, et qu'il y a au moins 8 trimestres communs de chaque côté. Il montre les sources rattachées aux observations, puis l'estimation, son intervalle de confiance, sa p-valeur, une pré-tendance et une courbe indexée. La complétude ne valide pas les hypothèses causales ; les résultats et le choix des témoins doivent être interprétés avec prudence, surtout avec peu de territoires.
+
+### Nouveau cas exploratoire : Loudoun, Virginie — Data Center Alley
+
+Le dossier distingue le plan d’urbanisme du comté adopté en 2019 et l’amendement de zonage « Data Center Standards and Locations » (ZOAM-2020-0001) adopté en 2023. Importez d’abord les sources, territoires, politiques, entreprises et expositions des CSV (étape 7), puis chargez les séries disponibles :
+
+```powershell
+python scripts/fetch_qcew_local_panel.py --start-year 2017 --end-year 2025
+python scripts/fetch_qcew_state_tax_panel.py --start-year 2017 --end-year 2025
+python scripts/fetch_event_data.py --case loudoun
+python scripts/event_study.py --policy-id policy-loudoun-data-center-zoam-2023 --event-column adoption_date --window-days 5 --index-name "^GSPC"
+python scripts/fetch_gdelt_context.py --case loudoun --start-date 2019-01-01 --end-date 2025-12-31
+```
+
+Le QCEW ajoute l’emploi privé et le salaire hebdomadaire moyen à Loudoun et dans Fairfax/Prince William, plus l’emploi de l’industrie NAICS 5182 (traitement/hébergement de données) lorsque la publication et les règles de confidentialité le permettent. Virginia est également ajoutée au panel QCEW d’État. Fairfax et Prince William sont des comparateurs descriptifs, pas des témoins non traités validés : les retombées du secteur et les tendances préalables doivent être examinées.
+
+Amazon/AWS et Equinix sont enregistrées comme candidates d’exposition régionale, sans score d’exposition ni effectifs locaux. Les pages d’infrastructure référencées ne prouvent pas à elles seules qu’un site précis appartient au périmètre de Loudoun; vérifiez les parcelles, l’entité juridique et les dates avant toute estimation. La commande `event_study.py` calcule un CAR descriptif par rapport au S&P 500, sans groupe témoin ni attribution causale. Les cours d’Amazon et d’Equinix sont ceux des sociétés mondiales. L’effectif/salaire local de chaque opérateur reste à obtenir via des données d’établissement ou des rapports d’entreprise ventilés par site. GDELT mesure un volume approximatif de mentions médiatiques, pas leur tonalité ou un impact économique.
+
+Les graphiques Loudoun affichent des lignes verticales pour l’année du plan global (2019, repère annuel approximatif) et l’adoption de l’amendement de zonage (6 décembre 2023). On peut rechercher une évolution graduelle de l’emploi/salaire NAICS 5182 ou de l’attention médiatique après ces jalons, mais aucune hausse ponctuelle n’est garantie. Une rupture absente ne prouve pas l’absence d’effet; un changement visible ne prouve pas non plus que la politique en est la cause. Pour les cours mondiaux, aucun saut à la date d’adoption n’est attendu : les prix peuvent anticiper une décision et sont dominés par de nombreux facteurs globaux.
+
+Un autre candidat récent est **Microsoft à Mount Pleasant (Wisconsin)** : l’entreprise a annoncé le 8 mai 2024 un investissement cloud/IA de 3,3 Md USD ([annonce Microsoft](https://news.microsoft.com/source/2024/05/08/microsoft-announces-3-3-billion-investment-in-wisconsin-to-spur-artificial-intelligence-innovation-and-economic-growth/)). Ce n’est pas encore un cas traité dans la base : il faut documenter séparément les décisions locales de zonage/permis et les aides d’État avant de définir une date de traitement.
+
+### Cas législatif : exonération fiscale des centres de données en Virginie
+
+L’onglet **Exonération data centers (Virginie)** porte sur le § 58.1-609.3(18) du Code de Virginie, en vigueur depuis le 1er juillet 2010. La règle générale conditionne l’exonération à un investissement de 150 M$, à 50 nouveaux emplois rémunérés au moins 1,5 fois le salaire moyen local et à un protocole d’accord VEDP. Le texte comporte des dispositions particulières selon les localités. Aucune date d’adoption séparée n’est supposée.
+
+Après l’import initial des CSV (étape 7), exécutez les collecteurs depuis `glpid_simple_starter` :
+
+```powershell
+python scripts/fetch_qcew_local_panel.py --start-year 2015 --end-year 2025
+python scripts/fetch_qcew_state_tax_panel.py --start-year 2015 --end-year 2025
+python scripts/fetch_event_data.py --case va-data-center
+```
+
+Le tableau de bord présente l’emploi et les salaires QCEW de l’État, ainsi que l’emploi/salaire NAICS 5182 de Loudoun lorsqu’ils sont publiés. Le QCEW disponible ici commence en 2015 : ses observations sont toutes postérieures à la loi et ne peuvent pas fournir une comparaison pré/post. Les rapports biennaux agrégés exigés par le texte ne sont pas encore importés. Amazon, Microsoft, Alphabet et Equinix sont des expositions candidates, sans score ni preuve qu’un site particulier a satisfait les critères ou signé un MOU. Les cours mondiaux des sociétés et du S&P 500 affichés autour de juillet 2010 sont uniquement contextuels et ne mesurent pas l’effet de l’exonération sur une entreprise locale. Les courbes ne constituent pas une estimation causale.
+
+La fenêtre boursière comporte une ligne verticale au **1er juillet 2010**, date d’entrée en vigueur (et non date d’adoption vérifiée). Les courbes QCEW ne peuvent pas afficher un repère de traitement dans leur période : le début de la série est en 2015. On peut rechercher une hausse d’emploi sectoriel ou des salaires après la loi si l’activité s’est développée, mais aucun saut précis n’est attendu; les projets prennent du temps et les données ne contiennent pas la période pré-loi. Les variations boursières mondiales autour de la ligne ne sont pas une preuve d’effet.
 
 La carte géographique n'est pas activée : le schéma actuel décrit les territoires et leurs relations, mais ne stocke pas encore de géométries.
 
@@ -250,17 +287,17 @@ Par défaut, le script compare ±5 séances, examine les 60 séances préalables
 
 ## 11. Étude exploratoire de l’emploi local à Seattle
 
-Le script `scripts/fetch_qcew_local_panel.py` télécharge auprès du Bureau of Labor Statistics les données trimestrielles QCEW d’emploi privé moyen et de salaire hebdomadaire moyen, tous secteurs, pour King County et cinq comtés de comparaison. Il enregistre directement la source, les territoires et les indicateurs dans PostgreSQL. La base doit déjà avoir reçu `sql/001_schema.sql` et `sql/002_views.sql`, et les variables de connexion doivent être configurées dans `.env`.
+Le script `scripts/fetch_qcew_local_panel.py` télécharge auprès du Bureau of Labor Statistics les données trimestrielles QCEW d’emploi privé moyen et de salaire hebdomadaire moyen, tous secteurs, pour King County et cinq comtés de comparaison, ainsi que Loudoun, Fairfax et Prince William. Il demande aussi le secteur NAICS 5182 (traitement, hébergement et services connexes) lorsqu’il est publié. Il enregistre directement la source, les territoires et les indicateurs dans PostgreSQL. La base doit déjà avoir reçu `sql/001_schema.sql` et `sql/002_views.sql`, et les variables de connexion doivent être configurées dans `.env`.
 
 ```powershell
-python scripts/fetch_qcew_local_panel.py --start-year 2015 --end-year 2025
+python scripts/fetch_qcew_local_panel.py --start-year 2017 --end-year 2025
 python scripts/local_employment_did.py --indicator employment --post-quarter 2020-Q3
 python scripts/local_employment_did.py --indicator employment --post-quarter 2021-Q1 --adoption-quarter 2020-Q3
 python scripts/local_employment_did.py --indicator weekly-wage --post-quarter 2020-Q3
 python scripts/local_employment_did.py --indicator weekly-wage --post-quarter 2021-Q1 --adoption-quarter 2020-Q3
 ```
 
-Cette analyse est **exploratoire, pas une estimation causale fiable de l’effet de la taxe Seattle** : le QCEW public est au niveau du comté, de sorte que King County est un proxy imparfait de la ville. Les comparaisons portent sur cinq autres comtés de Washington et six grappes seulement ; les erreurs-types et p-valeurs sont fragiles. Il faut aussi examiner les tendances préalables et les effets de la pandémie. En particulier, des tendances salariales préalables divergentes invalident l’interprétation DiD simple, même si l’estimation affiche une p-valeur faible.
+Cette analyse est **exploratoire, pas une estimation causale fiable de l’effet de la taxe Seattle** : le QCEW public est au niveau du comté, de sorte que King County est un proxy imparfait de la ville. Les comparaisons Seattle portent sur cinq autres comtés de Washington ; pour Loudoun, Fairfax et Prince William sont proches et peuvent subir des retombées des centres de données. Ils ne constituent donc pas des témoins non traités validés. Il faut examiner les tendances préalables, les chocs concomitants et la comparabilité des géographies.
 
 Le téléchargement inclut également les séries QCEW de secteurs (information, finance, services professionnels, gestion, santé, hébergement/restauration, etc.). Les codes `--indicator` détaillés sont affichés par `python scripts/local_employment_did.py --help`. Pour tester des pseudo-dates antérieures à la taxe sur une période strictement pré-politique :
 
@@ -271,13 +308,14 @@ python scripts/local_employment_did.py --indicator employment-professional-scien
 
 ### Contexte médiatique avec GDELT
 
-Une série mensuelle de volume d’articles GDELT peut être récupérée comme chronologie de l’attention médiatique autour de JumpStart :
+Une série mensuelle de volume d’articles GDELT peut être récupérée comme chronologie de l’attention médiatique autour de JumpStart ou Data Center Alley :
 
 ```powershell
 python scripts/fetch_gdelt_context.py --start-date 2019-01-01 --end-date 2022-12-31
+python scripts/fetch_gdelt_context.py --case loudoun --start-date 2019-01-01 --end-date 2025-12-31
 ```
 
-Cette série ne mesure ni l’emploi ni l’impact causal. L’API a renvoyé HTTP 429 lors de la collecte de ce projet ; en cas de 429, attendre avant de réessayer et ne pas lancer de boucles de requêtes. Aucune donnée GDELT n’a pour l’instant été importée dans la base.
+Cette série ne mesure ni l’emploi ni l’impact causal. Le cas Seattle reste la valeur par défaut ; `--case loudoun` utilise une requête séparée sur Loudoun, les centres de données, AWS et Equinix. Les requêtes GDELT sont sensibles aux termes choisis et peuvent inclure des articles hors sujet ; en cas de 429, attendre avant de réessayer et ne pas lancer de boucles de requêtes.
 
 ## 11. Résultats locaux et plans causaux
 

@@ -154,6 +154,162 @@ CASES = {
             ("company-bnp-fr", "BNP Paribas SA", "BNP.PA", "Financials"),
         ],
     },
+    "loudoun": {
+        "territory_id": "us-va-loudoun-county",
+        "territory_name": "Loudoun County, Virginia",
+        "territory_type": "region",
+        "parent_territory_id": "us-va",
+        "country_code": "US",
+        "index_ticker": "^GSPC",
+        "exposure_basis": (
+            "Candidate data-center operations in the Loudoun region. The operating "
+            "footprint, local payroll, tax apportionment, and employee counts are not "
+            "measured by this exposure record."
+        ),
+        "exposure_type": "operations",
+        "headquarters_territory_id": "us",
+        "company_notes": (
+            "Global listed parent used for market-price context; local facility-level "
+            "employment and financial results are not available in this record."
+        ),
+        "territory_description": (
+            "Loudoun County, the principal study geography for Data Center Alley; "
+            "county QCEW data do not identify individual operators."
+        ),
+        "exposure_notes": (
+            "Candidate regional operations only; this is not a verified parcel-level "
+            "exposure or local employment measure."
+        ),
+        "exposure_sources": {
+            "company-amazon": {
+                "source_id": "source-aws-northern-virginia",
+                "publisher": "Amazon Web Services",
+                "title": "AWS Global Infrastructure — Regions and Availability Zones",
+                "url": "https://aws.amazon.com/about-aws/global-infrastructure/regions_az/",
+            },
+            "company-equinix": {
+                "source_id": "source-equinix-ashburn",
+                "publisher": "Equinix",
+                "title": "Equinix Washington, DC data centers",
+                "url": "https://www.equinix.com/data-centers/americas-colocation/united-states-colocation/washington-dc-data-centers",
+            },
+        },
+        "start_date": date(2023, 8, 1),
+        "end_date": date(2024, 4, 30),
+        "policy": {
+            "policy_id": "policy-loudoun-data-center-zoam-2023",
+            "title": "Loudoun County Data Center Standards and Locations zoning amendment",
+            "policy_type": "data_center_zoning_amendment",
+            "summary": (
+                "Loudoun County's zoning amendment revised standards and siting rules "
+                "for data centers. Treat the Board adoption date as the event date; "
+                "the 2019 Comprehensive Plan is a separate earlier policy milestone."
+            ),
+            "adoption_date": date(2023, 12, 6),
+            "effective_date": None,
+            "source_id": "source-loudoun-data-center-zoning",
+            "source_title": "Loudoun County Data Center Land Use and Zoning",
+            "source_publisher": "Loudoun County",
+            "source_url": "https://www.loudoun.gov/5473/Data-Center-Land-Use",
+            "official_reference": "ZOAM-2020-0001, Data Center Standards and Locations",
+            "affected_sector": "Data center development, operators, and adjacent land uses",
+            "expected_mechanism": (
+                "Siting and development standards may affect facility approvals, "
+                "construction timing, local tax base, and related employment."
+            ),
+        },
+        "companies": [
+            ("company-amazon", "Amazon.com, Inc.", "AMZN", "Consumer Discretionary"),
+            ("company-equinix", "Equinix, Inc.", "EQIX", "Real Estate"),
+        ],
+    },
+    "va-data-center": {
+        "territory_id": "us-va",
+        "territory_name": "Virginia",
+        "territory_type": "state",
+        "parent_territory_id": "us",
+        "country_code": "US",
+        "territory_description": (
+            "Virginia state data-center equipment sales-and-use tax exemption; "
+            "eligibility is conditional on investment, jobs, wages, and an MOU."
+        ),
+        "index_ticker": "^GSPC",
+        "exposure_basis": (
+            "Candidate data-center operator with a Virginia regional footprint. "
+            "This does not establish that the firm or any facility qualified for "
+            "Virginia's exemption or signed a qualifying MOU."
+        ),
+        "exposure_type": "operations",
+        "exposure_notes": (
+            "Candidate operator only; eligibility, MOU, facility-level investment, "
+            "local jobs, and exemption claims are not verified."
+        ),
+        "exposure_sources": {
+            "company-amazon-va-dc": {
+                "source_id": "source-aws-northern-virginia",
+                "publisher": "Amazon Web Services",
+                "title": "AWS Global Infrastructure — Regions and Availability Zones",
+                "url": "https://aws.amazon.com/about-aws/global-infrastructure/regions_az/",
+            },
+            "company-microsoft-va-dc": {
+                "source_id": "source-microsoft-datacenters",
+                "publisher": "Microsoft",
+                "title": "Microsoft datacenter locations",
+                "url": "https://datacenters.microsoft.com/globe/explore/",
+            },
+            "company-alphabet-va-dc": {
+                "source_id": "source-google-datacenters",
+                "publisher": "Google",
+                "title": "Google data center locations",
+                "url": "https://datacenters.google/locations/",
+            },
+            "company-equinix-va-dc": {
+                "source_id": "source-equinix-ashburn",
+                "publisher": "Equinix",
+                "title": "Equinix Washington, DC data centers",
+                "url": "https://www.equinix.com/data-centers/americas-colocation/united-states-colocation/washington-dc-data-centers",
+            },
+        },
+        "headquarters_territory_id": "us",
+        "company_notes": (
+            "Global listed parent used for market-price context; not proof of "
+            "Virginia tax-exemption qualification or Virginia employment."
+        ),
+        "start_date": date(2010, 1, 1),
+        "end_date": date(2011, 3, 31),
+        "policy": {
+            "policy_id": "policy-va-data-center-equipment-exemption-2010",
+            "title": "Virginia conditional sales-and-use tax exemption for data centers",
+            "policy_type": "data_center_tax_exemption",
+            "summary": (
+                "Virginia Code § 58.1-609.3(18) provides a conditional exemption "
+                "from July 1, 2010 through June 30, 2035 for qualifying data-center "
+                "equipment/software purchases. Eligibility generally requires a "
+                "$150 million investment, 50 new jobs paid at least 1.5 times the "
+                "local prevailing wage, and a VEDP memorandum of understanding; "
+                "special locality rules can alter thresholds."
+            ),
+            "adoption_date": None,
+            "effective_date": date(2010, 7, 1),
+            "source_id": "source-va-data-center-exemption",
+            "source_title": "Virginia Code § 58.1-609.3(18) — Data center exemption",
+            "source_publisher": "Commonwealth of Virginia",
+            "source_url": "https://law.lis.virginia.gov/vacode/title58.1/chapter6/section58.1-609.3/",
+            "official_reference": "Code of Virginia § 58.1-609.3(18)",
+            "affected_sector": "Qualifying data-center operators and tenants",
+            "expected_mechanism": (
+                "Lower sales-and-use tax on eligible equipment can reduce the "
+                "cost of qualifying data-center investment, conditional on job, "
+                "wage, investment, and reporting requirements."
+            ),
+        },
+        "companies": [
+            ("company-amazon-va-dc", "Amazon.com, Inc.", "AMZN", "Technology"),
+            ("company-microsoft-va-dc", "Microsoft Corporation", "MSFT", "Technology"),
+            ("company-alphabet-va-dc", "Alphabet Inc.", "GOOG", "Technology"),
+            ("company-equinix-va-dc", "Equinix, Inc.", "EQIX", "Real Estate"),
+        ],
+    },
 }
 
 
@@ -249,7 +405,7 @@ def store_history(conn, case, start_date, end_date):
                 INSERT INTO territories
                     (territory_id, name, territory_type, country_code, parent_territory_id, description)
                 VALUES (%s, %s, %s, %s, %s,
-                        'Subnational tax jurisdiction used for the event-study example.')
+                        %s)
                 ON CONFLICT (territory_id) DO UPDATE
                 SET name = EXCLUDED.name,
                     territory_type = EXCLUDED.territory_type,
@@ -264,6 +420,10 @@ def store_history(conn, case, start_date, end_date):
                     case["territory_type"],
                     country_code,
                     parent_territory_id,
+                    case.get(
+                        "territory_description",
+                        "Subnational jurisdiction used for the event-study example.",
+                    ),
                 ),
             )
             cur.execute(
@@ -322,11 +482,32 @@ def store_history(conn, case, start_date, end_date):
             )
 
         for company_id, name, ticker, sector in case["companies"]:
+            exposure_source = case.get("exposure_sources", {}).get(company_id)
+            if exposure_source:
+                cur.execute(
+                    """
+                    INSERT INTO sources (source_id, publisher, title, source_type, url, notes)
+                    VALUES (%s, %s, %s, 'company_report', %s,
+                            'Operator-published regional infrastructure information; not a parcel-level employment or ownership record.')
+                    ON CONFLICT (source_id) DO UPDATE
+                    SET publisher = EXCLUDED.publisher,
+                        title = EXCLUDED.title,
+                        source_type = EXCLUDED.source_type,
+                        url = EXCLUDED.url,
+                        notes = EXCLUDED.notes
+                    """,
+                    (
+                        exposure_source["source_id"],
+                        exposure_source["publisher"],
+                        exposure_source["title"],
+                        exposure_source["url"],
+                    ),
+                )
             cur.execute(
                 """
                 INSERT INTO companies (company_id, name, country_code, sector, ticker, headquarters_territory_id, notes)
                 VALUES (%s, %s, %s, %s, %s, %s,
-                        'Candidate for a jurisdictional tax-policy event study; actual tax exposure should be verified from filings.')
+                        %s)
                 ON CONFLICT (company_id) DO UPDATE
                 SET name = EXCLUDED.name,
                     country_code = EXCLUDED.country_code,
@@ -335,25 +516,51 @@ def store_history(conn, case, start_date, end_date):
                     headquarters_territory_id = EXCLUDED.headquarters_territory_id,
                     notes = EXCLUDED.notes
                 """,
-                (company_id, name, country_code, sector, ticker, territory_id),
+                (
+                    company_id,
+                    name,
+                    country_code,
+                    sector,
+                    ticker,
+                    case.get("headquarters_territory_id", territory_id),
+                    case.get(
+                        "company_notes",
+                        "Candidate for a jurisdictional tax-policy event study; actual tax exposure should be verified from filings.",
+                    ),
+                ),
             )
             cur.execute(
                 """
                 INSERT INTO company_exposures
                     (exposure_id, company_id, territory_id, exposure_type, exposure_basis,
-                     exposure_score, start_date, notes)
-                VALUES (%s, %s, %s, 'headquarters', %s,
-                        NULL, NULL, 'Headquarters-based candidate only; state taxable income and apportionment not measured.')
+                     exposure_score, source_id, source_page, start_date, notes)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (exposure_id) DO UPDATE
                 SET company_id = EXCLUDED.company_id,
                     territory_id = EXCLUDED.territory_id,
                     exposure_type = EXCLUDED.exposure_type,
                     exposure_basis = EXCLUDED.exposure_basis,
-                    start_date = NULL,
-                    exposure_score = NULL,
+                    exposure_score = EXCLUDED.exposure_score,
+                    source_id = COALESCE(EXCLUDED.source_id, company_exposures.source_id),
+                    source_page = COALESCE(EXCLUDED.source_page, company_exposures.source_page),
+                    start_date = EXCLUDED.start_date,
                     notes = EXCLUDED.notes
                 """,
-                (f"exposure-{company_id}-{territory_id}", company_id, territory_id, case["exposure_basis"]),
+                (
+                    f"exposure-{company_id}-{territory_id}",
+                    company_id,
+                    territory_id,
+                    case.get("exposure_type", "headquarters"),
+                    case["exposure_basis"],
+                    case.get("exposure_score"),
+                    exposure_source["source_id"] if exposure_source else None,
+                    exposure_source["url"] if exposure_source else None,
+                    case.get("exposure_start_date"),
+                    case.get(
+                        "exposure_notes",
+                        "Headquarters-based candidate only; state taxable income and apportionment not measured.",
+                    ),
+                ),
             )
 
             prices = fetch_history(ticker, start_date, end_date)

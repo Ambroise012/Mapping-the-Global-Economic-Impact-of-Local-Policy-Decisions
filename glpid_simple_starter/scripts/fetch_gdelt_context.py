@@ -15,9 +15,20 @@ from dotenv import load_dotenv
 
 SOURCE_ID = "source-gdelt-doc-api"
 SOURCE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
-TERRITORY_ID = "us-wa-seattle"
-QUERY = 'Seattle AND (JumpStart OR "payroll expense tax")'
-INDICATOR_CODE = "gdelt_jumpstart_seattle_article_count"
+CASES = {
+    "seattle": {
+        "territory_id": "us-wa-seattle",
+        "query": 'Seattle AND (JumpStart OR "payroll expense tax")',
+        "indicator_code": "gdelt_jumpstart_seattle_article_count",
+        "label": "Seattle JumpStart",
+    },
+    "loudoun": {
+        "territory_id": "us-va-loudoun-county",
+        "query": 'Loudoun AND ("data center" OR "Data Center Alley" OR Equinix OR AWS)',
+        "indicator_code": "gdelt_loudoun_data_center_article_count",
+        "label": "Data Center Alley à Loudoun",
+    },
+}
 
 
 def month_range(start, end):
@@ -55,9 +66,9 @@ def parse_raw_timeline(payload):
     return monthly_counts
 
 
-def fetch_timeline(start, end):
+def fetch_timeline(start, end, query):
     params = {
-        "query": QUERY,
+        "query": query,
         "mode": "timelinevolraw",
         "format": "json",
         "startdatetime": start.strftime("%Y%m%d000000"),
@@ -104,15 +115,18 @@ def connect():
     )
 
 
-def persist_timeline(monthly_counts, start, end, source_page):
+def persist_timeline(monthly_counts, start, end, source_page, case):
+    territory_id = case["territory_id"]
+    indicator_code = case["indicator_code"]
+    query = case["query"]
     records = []
     for period_start, period_end in month_range(start, end):
         count = monthly_counts.get(period_start, 0)
         records.append(
             (
-                f"{TERRITORY_ID}-{INDICATOR_CODE}-{period_start:%Y-%m}",
-                TERRITORY_ID,
-                INDICATOR_CODE,
+                f"{territory_id}-{indicator_code}-{period_start:%Y-%m}",
+                territory_id,
+                indicator_code,
                 period_start,
                 period_end,
                 count,
@@ -121,7 +135,7 @@ def persist_timeline(monthly_counts, start, end, source_page):
                 SOURCE_ID,
                 source_page,
                 (
-                    f"Raw GDELT DOC API article count for query {QUERY!r}; "
+                    f"Raw GDELT DOC API article count for query {query!r}; "
                     "media-attention context only, not an economic outcome or exposure measure."
                 ),
             )
@@ -129,10 +143,10 @@ def persist_timeline(monthly_counts, start, end, source_page):
 
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM territories WHERE territory_id = %s", (TERRITORY_ID,))
+            cur.execute("SELECT 1 FROM territories WHERE territory_id = %s", (territory_id,))
             if cur.fetchone() is None:
                 raise ValueError(
-                    f"Territoire {TERRITORY_ID!r} absent. Charge d’abord le panel QCEW Seattle."
+                    f"Territoire {territory_id!r} absent. Charge d’abord son panel territorial."
                 )
             cur.execute(
                 """
@@ -148,7 +162,7 @@ def persist_timeline(monthly_counts, start, end, source_page):
                 (
                     SOURCE_ID,
                     "GDELT Project",
-                    "GDELT DOC API — raw article volume timeline",
+                    f"GDELT DOC API — {case['label']} — volume brut d’articles",
                     "news",
                     SOURCE_URL,
                     "Search-derived media attention counts; coverage and query matching are imperfect.",
@@ -174,8 +188,9 @@ def persist_timeline(monthly_counts, start, end, source_page):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Importe dans PostgreSQL le volume mensuel de mentions médiatiques GDELT sur JumpStart."
+        description="Importe dans PostgreSQL le volume mensuel d’articles GDELT d’un cas local."
     )
+    parser.add_argument("--case", choices=sorted(CASES), default="seattle")
     parser.add_argument("--start-date", type=date.fromisoformat, default=date(2019, 1, 1))
     parser.add_argument("--end-date", type=date.fromisoformat, default=date(2022, 12, 31))
     args = parser.parse_args()
@@ -186,9 +201,14 @@ def main():
     )[1]:
         parser.error("Les dates doivent couvrir des mois entiers.")
 
+    case = CASES[args.case]
     try:
-        monthly_counts, source_page = fetch_timeline(args.start_date, args.end_date)
-        count = persist_timeline(monthly_counts, args.start_date, args.end_date, source_page)
+        monthly_counts, source_page = fetch_timeline(
+            args.start_date, args.end_date, case["query"]
+        )
+        count = persist_timeline(
+            monthly_counts, args.start_date, args.end_date, source_page, case
+        )
     except (RuntimeError, ValueError, psycopg.Error) as exc:
         print(f"Erreur : {exc}", file=sys.stderr)
         raise SystemExit(1) from exc

@@ -43,7 +43,9 @@ def read_query(query, params=()):
     with connect_read_only() as conn:
         with conn.transaction():
             conn.execute("SET TRANSACTION READ ONLY")
-            return pd.DataFrame(conn.execute(query, params).fetchall())
+            result = conn.execute(query, params)
+            columns = [column.name for column in result.description]
+            return pd.DataFrame(result.fetchall(), columns=columns)
 
 
 @st.cache_data(ttl=60)
@@ -193,6 +195,36 @@ def load_metadata():
 
 def metric(column, label, value):
     column.metric(label, f"{int(value):,}".replace(",", " "))
+
+
+def add_date_marker(fig, chart_data, date_column, event_date, label, color="#b22222"):
+    dates = pd.to_datetime(chart_data[date_column], errors="coerce").dropna()
+    marker_date = pd.Timestamp(event_date)
+    if dates.empty or marker_date < dates.min() or marker_date > dates.max():
+        return
+    fig.add_shape(
+        type="line",
+        x0=marker_date,
+        x1=marker_date,
+        y0=0,
+        y1=1,
+        xref="x",
+        yref="paper",
+        line=dict(color=color, dash="dash", width=1.5),
+    )
+    fig.add_annotation(
+        x=marker_date,
+        y=1,
+        xref="x",
+        yref="paper",
+        text=label,
+        showarrow=False,
+        textangle=-90,
+        xanchor="right",
+        yanchor="top",
+        yshift=-6,
+        font=dict(color=color, size=10),
+    )
 
 
 def apply_shared_filters(frame, country, territory_type, date_range):
@@ -1222,6 +1254,499 @@ def show_companies(companies):
     )
 
 
+def show_loudoun_case():
+    st.subheader("Loudoun (Virginie) — Data Center Alley")
+    st.markdown(
+        "Étude exploratoire de la planification et du zonage des centres de données, "
+        "avec Amazon/AWS et Equinix comme opérateurs candidats. Le plan global de 2019 "
+        "et l’amendement de zonage ZOAM-2020-0001 adopté en 2023 sont deux jalons "
+        "distincts; ils ne constituent pas une expérience naturelle à eux seuls."
+    )
+    st.markdown(
+        "- **2019 :** plan global du comté, cadre de planification de l’usage des sols.\n"
+        "- **2023 :** amendement « Data Center Standards and Locations »; "
+        "la date d’adoption du 6 décembre 2023 sert de date événementielle provisoire.\n"
+        "- [Page officielle du comté sur l’usage des sols des centres de données]"
+        "(https://www.loudoun.gov/5473/Data-Center-Land-Use)"
+    )
+    st.warning(
+        "Les cours AMZN et EQIX reflètent les groupes mondiaux, pas leurs résultats "
+        "dans Loudoun. Les chiffres QCEW sont des agrégats territoriaux; ils ne "
+        "dénombrent pas les salariés Amazon/AWS ou Equinix. Les graphiques ci-dessous "
+        "sont descriptifs et ne démontrent pas un effet causal."
+    )
+
+    territory_ids = [
+        "us-va-loudoun-county",
+        "us-va",
+        "us-va-fairfax-county",
+        "us-va-prince-william-county",
+    ]
+    observations = read_query(
+        """
+        SELECT t.name AS territory, i.indicator_code, i.period_start, i.period_end,
+               i.value, i.unit, i.geographic_scope, s.title AS source_title,
+               s.url AS source_url
+        FROM territory_indicators i
+        JOIN territories t ON t.territory_id = i.territory_id
+        JOIN sources s ON s.source_id = i.source_id
+        WHERE i.territory_id = ANY(%s)
+          AND (
+              i.indicator_code LIKE %s
+              OR i.indicator_code LIKE %s
+              OR i.indicator_code = %s
+          )
+        ORDER BY i.period_start, t.name, i.indicator_code
+        """,
+        (
+            territory_ids,
+            "qcew_private_employment%",
+            "qcew_private_avg_weekly_wage%",
+            "gdelt_loudoun_data_center_article_count",
+        ),
+    )
+    exposures = read_query(
+        """
+        SELECT c.name AS company, c.ticker, e.exposure_type, e.exposure_basis,
+               e.exposure_score, COALESCE(e.source_page, s.url) AS source_url,
+               e.notes
+        FROM company_exposures e
+        JOIN companies c ON c.company_id = e.company_id
+        LEFT JOIN sources s ON s.source_id = e.source_id
+        WHERE e.territory_id = %s
+        ORDER BY c.name
+        """,
+        ("us-va-loudoun-county",),
+    )
+    company_indicators = read_query(
+        """
+        SELECT c.name AS company, ci.indicator_code, ci.period_start, ci.period_end,
+               ci.value, ci.unit, ci.geographic_scope, s.title AS source_title,
+               s.url AS source_url, ci.notes
+        FROM company_indicators ci
+        JOIN companies c ON c.company_id = ci.company_id
+        JOIN sources s ON s.source_id = ci.source_id
+        WHERE ci.territory_id = %s
+          AND c.ticker = ANY(%s)
+        ORDER BY ci.period_start, c.name, ci.indicator_code
+        """,
+        ("us-va-loudoun-county", ["AMZN", "EQIX"]),
+    )
+    prices = read_query(
+        """
+        SELECT c.name AS series, cp.price_date, COALESCE(cp.adjusted_close_price,
+               cp.close_price) AS price, cp.currency
+        FROM company_prices cp
+        JOIN companies c ON c.company_id = cp.company_id
+        WHERE c.ticker = ANY(%s)
+          AND cp.price_date BETWEEN DATE '2023-08-01' AND DATE '2024-04-30'
+        UNION ALL
+        SELECT 'S&P 500' AS series, mip.price_date, mip.close_value AS price,
+               mip.currency
+        FROM market_index_prices mip
+        WHERE mip.index_name = '^GSPC'
+          AND mip.price_date BETWEEN DATE '2023-08-01' AND DATE '2024-04-30'
+        ORDER BY price_date, series
+        """,
+        (["AMZN", "EQIX"],),
+    )
+
+    qcew = observations[
+        observations["indicator_code"].str.startswith(
+            ("qcew_private_employment", "qcew_private_avg_weekly_wage")
+        )
+    ]
+    media = observations[
+        observations["indicator_code"] == "gdelt_loudoun_data_center_article_count"
+    ]
+    local_company_employment = company_indicators[
+        company_indicators["indicator_code"].str.contains(
+            "employment|headcount|employee", case=False, na=False
+        )
+    ]
+    metrics = st.columns(5)
+    metric(
+        metrics[0],
+        "Observations QCEW",
+        len(qcew),
+    )
+    metric(metrics[1], "Expositions candidates", len(exposures))
+    metric(metrics[2], "Emploi local d’entreprise", len(local_company_employment))
+    metric(
+        metrics[3],
+        "Cours AMZN / EQIX",
+        len(prices[prices["series"] != "S&P 500"]),
+    )
+    metric(metrics[4], "Mentions GDELT", len(media))
+
+    employment_codes = [
+        ("qcew_private_employment", "Emploi privé — tous secteurs"),
+        (
+            "qcew_private_employment_data-processing-hosting-related-services",
+            "Emploi privé — traitement, hébergement et services connexes (NAICS 5182)",
+        ),
+    ]
+    wage_codes = [
+        ("qcew_private_avg_weekly_wage", "Salaire hebdomadaire moyen — tous secteurs"),
+        (
+            "qcew_private_avg_weekly_wage_data-processing-hosting-related-services",
+            "Salaire hebdomadaire moyen — NAICS 5182",
+        ),
+    ]
+    left, right = st.columns(2)
+    for column, series in ((left, employment_codes), (right, wage_codes)):
+        for indicator_code, title in series:
+            chart_data = qcew[qcew["indicator_code"] == indicator_code].dropna(
+                subset=["value"]
+            )
+            with column:
+                st.markdown(f"#### {title}")
+                if chart_data.empty:
+                    st.info("Aucune observation chargée pour cette série.")
+                    continue
+                fig = px.line(
+                    chart_data,
+                    x="period_start",
+                    y="value",
+                    color="territory",
+                    markers=True,
+                    hover_data=["period_end", "source_title", "source_url"],
+                    labels={
+                        "period_start": "Période",
+                        "value": chart_data["unit"].iloc[0],
+                        "territory": "Territoire",
+                    },
+                )
+                add_date_marker(
+                    fig,
+                    chart_data,
+                    "period_start",
+                    date(2019, 1, 1),
+                    "Plan global — 2019*",
+                    "#6a5acd",
+                )
+                add_date_marker(
+                    fig,
+                    chart_data,
+                    "period_start",
+                    date(2023, 12, 6),
+                    "Zonage adopté — 06/12/2023",
+                )
+                fig.update_layout(height=340, hovermode="x unified")
+                st.plotly_chart(fig, use_container_width=True)
+    st.caption(
+        "Le code NAICS 5182 est un proxy sectoriel (traitement/hébergement de données), "
+        "pas un décompte des emplois des centres de données ni des salariés de ces deux entreprises. "
+        "Fairfax et Prince William peuvent subir des retombées/spillovers et ne sont pas "
+        "des témoins non traités validés."
+    )
+    st.info(
+        "Lecture attendue, sans en faire une prédiction : si le cadre local a facilité "
+        "les projets, l’emploi NAICS 5182 ou les salaires peuvent augmenter avec retard "
+        "après les jalons. Une hausse nette n’est pas garantie; une courbe stable ou "
+        "une rupture absente ne prouve pas l’absence d’effet. *Le repère 2019 indique "
+        "l’année du plan global, pas une date précise d’adoption."
+    )
+
+    st.markdown("#### Entreprises, cours et couverture médiatique")
+    left, right = st.columns(2)
+    with left:
+        st.markdown("##### Exposition régionale documentée")
+        if exposures.empty:
+            st.info("Aucune exposition d’entreprise n’est chargée.")
+        else:
+            st.dataframe(exposures, use_container_width=True, hide_index=True)
+        st.markdown("##### Indicateurs locaux d’entreprise")
+        if company_indicators.empty:
+            st.info(
+                "Aucun effectif, salaire ou résultat local Amazon/Equinix n’est chargé. "
+                "Les rapports annuels publient surtout des totaux consolidés."
+            )
+        else:
+            st.dataframe(company_indicators, use_container_width=True, hide_index=True)
+    with right:
+        st.markdown("##### Cours boursiers (fenêtre événementielle)")
+        if prices.empty:
+            st.info(
+                "Aucun cours n’est chargé. Utilisez le collecteur d’événement "
+                "avec le cas « loudoun »."
+            )
+        else:
+            prices = prices.sort_values(["series", "price_date"]).copy()
+            prices["base_100"] = prices.groupby("series")["price"].transform(
+                lambda values: values / values.iloc[0] * 100
+            )
+            fig = px.line(
+                prices,
+                x="price_date",
+                y="base_100",
+                color="series",
+                labels={
+                    "price_date": "Date",
+                    "base_100": "Indice (premier cours = 100)",
+                    "series": "Série",
+                },
+            )
+            add_date_marker(
+                fig,
+                prices,
+                "price_date",
+                date(2023, 12, 6),
+                "Adoption du zonage — 06/12/2023",
+            )
+            fig.update_layout(height=360, hovermode="x unified")
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(
+                "Prix ajustés lorsque disponibles; S&P 500 comme référence de marché. "
+                "La normalisation et la fenêtre autour de l’adoption ne sont pas une estimation causale."
+            )
+        st.markdown("##### Attention médiatique — GDELT")
+        if media.empty:
+            st.info(
+                "Aucune série GDELT n’est chargée. Les mentions sont une mesure "
+                "d’attention médiatique, pas d’opinion ni d’impact économique."
+            )
+        else:
+            fig = px.line(
+                media,
+                x="period_start",
+                y="value",
+                markers=True,
+                hover_data=["source_title", "source_url"],
+                labels={"period_start": "Mois", "value": "Articles", "territory": "Territoire"},
+            )
+            add_date_marker(
+                fig,
+                media,
+                "period_start",
+                date(2019, 1, 1),
+                "Plan global — 2019*",
+                "#6a5acd",
+            )
+            add_date_marker(
+                fig,
+                media,
+                "period_start",
+                date(2023, 12, 6),
+                "Adoption du zonage — 06/12/2023",
+            )
+            fig.update_layout(height=300)
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(
+                "Un pic de mentions peut apparaître autour d’une décision très couverte, "
+                "mais GDELT n’est ni exhaustif ni une mesure de tonalité; l’absence de pic "
+                "ne signifie pas absence d’effet médiatique."
+            )
+
+    st.markdown("#### Cas récent à instruire : Microsoft — Mount Pleasant (Wisconsin)")
+    st.markdown(
+        "Microsoft a annoncé le **8 mai 2024** un investissement de **3,3 Md USD** "
+        "dans une infrastructure cloud/IA à Mount Pleasant. "
+        "[Annonce officielle Microsoft]"
+        "(https://news.microsoft.com/source/2024/05/08/microsoft-announces-3-3-billion-investment-in-wisconsin-to-spur-artificial-intelligence-innovation-and-economic-growth/). "
+        "C’est un candidat récent et comparable par le secteur, mais l’annonce "
+        "d’investissement n’est pas en elle-même une décision publique locale : "
+        "il faut dater séparément permis/zoning locaux, accords fiscaux municipaux "
+        "et aides d’État avant de l’ajouter comme traitement causal."
+    )
+
+
+def show_va_data_center_exemption():
+    st.subheader("Virginie — exonération fiscale des centres de données")
+    st.markdown(
+        "Le § 58.1-609.3(18) du Code de Virginie prévoit une exonération "
+        "conditionnelle de la taxe de vente et d’usage sur certains équipements "
+        "et logiciels de centres de données, du **1er juillet 2010 au 30 juin 2035**. "
+        "[Texte officiel](https://law.lis.virginia.gov/vacode/title58.1/chapter6/section58.1-609.3/)."
+    )
+    st.markdown(
+        "La règle générale prévoit au moins **150 M$ d’investissement**, "
+        "**50 nouveaux emplois** rémunérés au moins **1,5 fois le salaire moyen "
+        "local**, et un protocole d’accord avec la VEDP. Des règles particulières "
+        "peuvent modifier les seuils. Le texte prévoit aussi des rapports "
+        "biennaux agrégés sur l’emploi, l’investissement et les avantages fiscaux."
+    )
+    st.warning(
+        "La date d’entrée en vigueur n’est pas une date d’adoption vérifiée. "
+        "Les sociétés ci-dessous sont candidates, pas des bénéficiaires confirmées "
+        "de l’exonération. Le QCEW disponible à partir de 2015 est entièrement "
+        "postérieur à l’entrée en vigueur : il décrit l’évolution, mais ne permet "
+        "pas d’estimer une différence avant/après la loi. Les cours sont ceux des "
+        "groupes mondiaux et ne mesurent pas l’effet de la loi sur leurs sites en Virginie."
+    )
+
+    employment = read_query(
+        """
+        SELECT t.name AS territory, i.indicator_code, i.period_start, i.value,
+               i.unit, i.geographic_scope, s.title AS source_title, s.url AS source_url
+        FROM territory_indicators i
+        JOIN territories t ON t.territory_id = i.territory_id
+        JOIN sources s ON s.source_id = i.source_id
+        WHERE i.territory_id = ANY(%s)
+          AND i.indicator_code = ANY(%s)
+        ORDER BY i.period_start, t.name, i.indicator_code
+        """,
+        (
+            ["us-va", "us-va-loudoun-county"],
+            [
+                "qcew_private_employment",
+                "qcew_private_avg_weekly_wage",
+                "qcew_private_employment_data-processing-hosting-related-services",
+                "qcew_private_avg_weekly_wage_data-processing-hosting-related-services",
+            ],
+        ),
+    )
+    exposures = read_query(
+        """
+        SELECT c.name AS company, c.ticker, e.exposure_basis, e.notes,
+               COALESCE(e.source_page, s.url) AS source_url
+        FROM company_exposures e
+        JOIN companies c ON c.company_id = e.company_id
+        LEFT JOIN sources s ON s.source_id = e.source_id
+        WHERE e.territory_id = %s
+        ORDER BY c.name
+        """,
+        ("us-va",),
+    )
+    prices = read_query(
+        """
+        SELECT c.name AS series, cp.price_date,
+               COALESCE(cp.adjusted_close_price, cp.close_price) AS price
+        FROM company_prices cp
+        JOIN companies c ON c.company_id = cp.company_id
+        JOIN company_exposures e ON e.company_id = c.company_id
+        WHERE e.territory_id = %s
+          AND e.exposure_type = 'operations'
+          AND cp.price_date BETWEEN DATE '2010-01-01' AND DATE '2011-03-31'
+        UNION ALL
+        SELECT 'S&P 500' AS series, mip.price_date, mip.close_value AS price
+        FROM market_index_prices mip
+        WHERE mip.index_name = '^GSPC'
+          AND mip.price_date BETWEEN DATE '2010-01-01' AND DATE '2011-03-31'
+        ORDER BY price_date, series
+        """,
+        ("us-va",),
+    )
+
+    st.markdown("#### Expositions candidates")
+    if exposures.empty:
+        st.info("Aucune exposition d’entreprise n’est chargée pour Virginia.")
+    else:
+        st.dataframe(exposures, use_container_width=True, hide_index=True)
+
+    st.markdown("#### Emploi et rémunérations — données territoriales QCEW")
+    if employment.empty:
+        st.info(
+            "Aucune observation QCEW n’est chargée. Importez d’abord les territoires "
+            "et sources, puis exécutez le collecteur QCEW d’État et le collecteur local."
+        )
+    else:
+        labels = {
+            "qcew_private_employment": "Emploi privé — tous secteurs",
+            "qcew_private_avg_weekly_wage": "Salaire hebdomadaire — tous secteurs",
+            "qcew_private_employment_data-processing-hosting-related-services": (
+                "Emploi — traitement/hébergement (NAICS 5182)"
+            ),
+            "qcew_private_avg_weekly_wage_data-processing-hosting-related-services": (
+                "Salaire hebdomadaire — NAICS 5182"
+            ),
+        }
+        employment["series"] = employment["indicator_code"].map(labels)
+        for code, heading in (
+            ("qcew_private_employment", "Emploi"),
+            ("qcew_private_avg_weekly_wage", "Salaire hebdomadaire moyen"),
+        ):
+            subset = employment[
+                employment["indicator_code"].isin(
+                    [code, f"{code}_data-processing-hosting-related-services"]
+                )
+            ]
+            st.markdown(f"##### {heading}")
+            if subset.empty:
+                st.info(f"Aucune série QCEW chargée pour : {heading.lower()}.")
+            else:
+                fig = px.line(
+                    subset,
+                    x="period_start",
+                    y="value",
+                    color="territory",
+                    line_dash="series",
+                    markers=True,
+                    hover_data=[
+                        "unit",
+                        "geographic_scope",
+                        "source_title",
+                        "source_url",
+                    ],
+                    labels={
+                        "period_start": "Période",
+                        "value": "Valeur",
+                        "territory": "Territoire",
+                        "series": "Indicateur",
+                    },
+                )
+                fig.update_layout(height=360, hovermode="x unified")
+                st.plotly_chart(fig, use_container_width=True)
+        st.caption(
+            "NAICS 5182 est un agrégat sectoriel, pas le nombre d’emplois dans les "
+            "centres de données ni les effectifs des entreprises candidates."
+        )
+        st.info(
+            "On pourrait observer une progression de l’emploi sectoriel ou des salaires "
+            "si les projets se développent, mais pas nécessairement une rupture nette : "
+            "les projets et recrutements sont étalés dans le temps. La loi entre en vigueur "
+            "en 2010, avant la couverture QCEW affichée (à partir de 2015); le repère "
+            "n’apparaît donc pas sur ce graphique et aucune comparaison pré/post n’est possible."
+        )
+
+    st.markdown("#### Cours boursiers autour de l’entrée en vigueur")
+    if prices.empty:
+        st.info(
+            "Aucun cours n’est chargé. Utilisez "
+            "`python scripts/fetch_event_data.py --case va-data-center`."
+        )
+    else:
+        prices = prices.sort_values(["series", "price_date"]).copy()
+        prices["base_100"] = prices.groupby("series")["price"].transform(
+            lambda values: values / values.iloc[0] * 100
+        )
+        fig = px.line(
+            prices,
+            x="price_date",
+            y="base_100",
+            color="series",
+            labels={
+                "price_date": "Date",
+                "base_100": "Indice (premier cours = 100)",
+                "series": "Série",
+            },
+        )
+        add_date_marker(
+            fig,
+            prices,
+            "price_date",
+            date(2010, 7, 1),
+            "Entrée en vigueur — 01/07/2010",
+        )
+        fig.update_layout(height=360, hovermode="x unified")
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(
+            "Les variations de cours mondiaux autour de juillet 2010 ne sont pas "
+            "attribuables à l’exonération; aucune preuve d’éligibilité d’une société "
+            "candidate ni analyse causale n’est disponible."
+        )
+        st.info(
+            "Aucun saut boursier précis n’est attendu ou nécessaire le 1er juillet : "
+            "la mesure a pu être anticipée et les cours réagissent à de nombreux facteurs "
+            "mondiaux. Le graphique sert uniquement à situer les prix dans le temps."
+        )
+    st.info(
+        "Les rapports biennaux agrégés prévus par la loi ne sont pas encore chargés "
+        "dans la base; aucun résultat d’emploi ou d’investissement de bénéficiaire "
+        "n’est donc présenté comme observé."
+    )
+
+
 st.title("🌍 GLPID — exploration de la base")
 st.markdown(
     "Explorez les réformes, territoires, sources et séries économiques. "
@@ -1310,6 +1835,8 @@ tabs = st.tabs(
         "Indicateurs",
         "Tester un effet causal",
         "Entreprises",
+        "Data Center Alley",
+        "Exonération data centers (Virginie)",
     ]
 )
 with tabs[0]:
@@ -1326,3 +1853,7 @@ with tabs[5]:
     show_causal_test(policies_all, territories)
 with tabs[6]:
     show_companies(data["companies"])
+with tabs[7]:
+    show_loudoun_case()
+with tabs[8]:
+    show_va_data_center_exemption()

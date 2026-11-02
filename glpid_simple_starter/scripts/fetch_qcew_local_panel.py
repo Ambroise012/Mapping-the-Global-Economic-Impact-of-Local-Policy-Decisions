@@ -16,18 +16,22 @@ from dotenv import load_dotenv
 SOURCE_ID = "source-bls-qcew"
 QCEW_SOURCE_URL = "https://www.bls.gov/cew/"
 COUNTIES = {
-    "us-wa-king-county": ("King County, Washington", "53033"),
-    "us-wa-clark-county": ("Clark County, Washington", "53011"),
-    "us-wa-spokane-county": ("Spokane County, Washington", "53063"),
-    "us-wa-thurston-county": ("Thurston County, Washington", "53067"),
-    "us-wa-whatcom-county": ("Whatcom County, Washington", "53073"),
-    "us-wa-yakima-county": ("Yakima County, Washington", "53077"),
+    "us-wa-king-county": ("King County, Washington", "53033", "us-wa"),
+    "us-wa-clark-county": ("Clark County, Washington", "53011", "us-wa"),
+    "us-wa-spokane-county": ("Spokane County, Washington", "53063", "us-wa"),
+    "us-wa-thurston-county": ("Thurston County, Washington", "53067", "us-wa"),
+    "us-wa-whatcom-county": ("Whatcom County, Washington", "53073", "us-wa"),
+    "us-wa-yakima-county": ("Yakima County, Washington", "53077", "us-wa"),
+    "us-va-loudoun-county": ("Loudoun County, Virginia", "51107", "us-va"),
+    "us-va-fairfax-county": ("Fairfax County, Virginia", "51059", "us-va"),
+    "us-va-prince-william-county": ("Prince William County, Virginia", "51153", "us-va"),
 }
 CITY_SOURCE_ID = "source-seattle-jumpstart"
 CITY_SOURCE_URL = "https://clerk.seattle.gov/search/ordinances/126109"
 SEATTLE_POLICY_ID = "policy-seattle-jumpstart-2021"
 INDUSTRIES = {
     "10": "all-industry-private",
+    "5182": "data-processing-hosting-related-services",
     "101": "goods-producing",
     "102": "service-providing",
     "51": "information",
@@ -172,6 +176,15 @@ def persist_panel(records):
                     None,
                 ),
                 (
+                    "us-va",
+                    "Virginia",
+                    "state",
+                    "US",
+                    "us",
+                    "State containing Loudoun County and the neighboring comparison geographies.",
+                    None,
+                ),
+                (
                     "us-wa-seattle",
                     "Seattle, Washington",
                     "city",
@@ -185,17 +198,24 @@ def persist_panel(records):
                 (
                     territory_id,
                     name,
-                    "other",
+                    "region",
                     "US",
-                    "us-wa",
+                    parent_territory_id,
                     (
                         "King County is an imperfect county-level proxy for Seattle."
                         if territory_id == "us-wa-king-county"
+                        else "Loudoun County is the treated geography for the Data Center Alley case."
+                        if territory_id == "us-va-loudoun-county"
+                        else "Neighboring county for descriptive comparison; data-center spillovers mean it is not a validated untreated control."
+                        if territory_id in {
+                            "us-va-fairfax-county",
+                            "us-va-prince-william-county",
+                        }
                         else "QCEW county-level comparison geography; not a matched untreated city."
                     ),
-                    QCEW_SOURCE_URL,
+                    None,
                 )
-                for territory_id, (name, _area_fips) in COUNTIES.items()
+                for territory_id, (name, _area_fips, parent_territory_id) in COUNTIES.items()
             )
             cur.executemany(
                 """
@@ -272,7 +292,7 @@ def load_panel(start_year, end_year):
     for year in range(start_year, end_year + 1):
         for quarter in range(1, 5):
             start, end = quarter_dates(year, quarter)
-            for territory_id, (_name, area_fips) in COUNTIES.items():
+            for territory_id, (_name, area_fips, _parent_territory_id) in COUNTIES.items():
                 industry_values = fetch_county_quarter(area_fips, year, quarter)
                 period_key = f"{year}-Q{quarter}"
                 source_page = (
@@ -328,7 +348,7 @@ def main():
     parser = argparse.ArgumentParser(
         description=(
             "Télécharge les indicateurs QCEW d’emploi privé et de salaires par secteur "
-            "pour King County et cinq comtés témoins, puis les enregistre dans PostgreSQL."
+            "pour King County, cinq comtés de comparaison, Loudoun et deux comtés voisins."
         )
     )
     parser.add_argument("--start-year", type=int, default=2017)
@@ -350,7 +370,8 @@ def main():
     )
     print(
         "Attention : King County est un proxy régional, pas une mesure de l’emploi "
-        "dans la seule ville de Seattle."
+        "dans la seule ville de Seattle. Fairfax et Prince William sont des comparateurs "
+        "descriptifs de Loudoun, pas des témoins non traités validés."
     )
 
 

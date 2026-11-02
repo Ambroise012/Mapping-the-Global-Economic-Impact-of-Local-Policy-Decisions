@@ -22,6 +22,7 @@ STATES = {
     "us-ny": ("New York", "36"),
     "us-oh": ("Ohio", "39"),
     "us-wv": ("West Virginia", "54"),
+    "us-va": ("Virginia", "51"),
 }
 POLICY_SOURCE_ID = "source-pa-act-53-2022"
 POLICY_SOURCE_URL = "https://www.legis.state.pa.us/WU01/LI/LI/US/PDF/2022/0/0053..PDF"
@@ -219,7 +220,7 @@ def persist_panel(records):
                     "state",
                     "US",
                     "us",
-                    "State-level QCEW outcome panel for exploratory comparison with Pennsylvania.",
+                    "State-level QCEW outcome panel for exploratory policy comparisons; not a firm-level measure.",
                 )
                 for territory_id, (state_name, _area_fips) in STATES.items()
             ]
@@ -320,8 +321,8 @@ def persist_panel(records):
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Télécharge les séries QCEW d’emploi et de salaire pour la Pennsylvanie "
-            "et les États voisins, puis les enregistre dans PostgreSQL."
+            "Télécharge les séries QCEW d’emploi et de salaire pour la Pennsylvanie, "
+            "ses États de comparaison et la Virginie."
         )
     )
     parser.add_argument("--start-year", type=int, default=2015)

@@ -1,1 +1,7 @@
 company_id,name,legal_name,country_code,sector,ticker,lei,registry_id,headquarters_territory_id,website_url,notes
+company-amazon,"Amazon.com, Inc.","Amazon.com, Inc.",US,Technology,AMZN,,,us,https://www.aboutamazon.com/,"Global listed parent; AWS is not separately listed. Regional infrastructure is a candidate exposure only and no local employee count is supplied."
+company-equinix,"Equinix, Inc.","Equinix, Inc.",US,Real estate investment trusts (REITs),EQIX,,,us,https://www.equinix.com/,"Global listed company; candidate regional facility presence is not a measure of local employment or financial results."
+company-amazon-va-dc,"Amazon.com, Inc.","Amazon.com, Inc.",US,Technology,AMZN,,,us,https://www.aboutamazon.com/,"Global listed parent; candidate Virginia data-center operator, not proof of qualifying for the state exemption."
+company-microsoft-va-dc,"Microsoft Corporation","Microsoft Corporation",US,Technology,MSFT,,,us,https://www.microsoft.com/,"Global listed parent; candidate Virginia data-center operator, not proof of qualifying for the state exemption."
+company-alphabet-va-dc,"Alphabet Inc.","Alphabet Inc.",US,Technology,GOOG,,,us,https://abc.xyz/,"Global listed parent; candidate Virginia data-center operator, not proof of qualifying for the state exemption."
+company-equinix-va-dc,"Equinix, Inc.","Equinix, Inc.",US,Real estate investment trusts (REITs),EQIX,,,us,https://www.equinix.com/,"Global listed company; candidate Virginia data-center operator, not proof of qualifying for the state exemption."

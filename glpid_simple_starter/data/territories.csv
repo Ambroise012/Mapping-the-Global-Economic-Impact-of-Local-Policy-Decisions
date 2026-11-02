@@ -23,3 +23,7 @@ us-santa-clara-city,Santa Clara,city,US,us-santa-clara-county,City in Santa Clar
 us-palo-alto,Palo Alto,city,US,us-santa-clara-county,City in Santa Clara County
 us-mountain-view,Mountain View,city,US,us-santa-clara-county,City in Santa Clara County
 us-redwood-city,Redwood City,city,US,us-san-mateo-county,City in San Mateo County
+us-va,Virginia,state,US,us,State containing Loudoun County and its regional comparison geographies,
+us-va-loudoun-county,Loudoun County,region,US,us-va,Principal study geography for Data Center Alley; county aggregates do not identify individual operators,
+us-va-fairfax-county,Fairfax County,region,US,us-va,Neighboring descriptive comparison geography; data-center spillovers make it an unvalidated control,
+us-va-prince-william-county,Prince William County,region,US,us-va,Neighboring descriptive comparison geography; data-center spillovers make it an unvalidated control,

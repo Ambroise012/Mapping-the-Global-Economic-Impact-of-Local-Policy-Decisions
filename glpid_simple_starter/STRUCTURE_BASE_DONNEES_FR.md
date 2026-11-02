@@ -18,6 +18,8 @@
 
 La taille PostgreSQL constatée est d’environ **25 Mo**. Les données sont donc un prototype de recherche structuré, pas un recensement exhaustif des entreprises, des ventes locales ou de toutes les réformes fiscales.
 
+**Note sur le cas ajouté au dépôt :** la photographie PostgreSQL ci-dessus précède l’ajout de Loudoun. Le nouvel onglet et les collecteurs décrits en section 10 sont disponibles dans le code, mais les nouvelles observations n’apparaissent dans la base qu’après import/exécution des commandes indiquées.
+
 ## 2. Comment le schéma est organisé
 
 Le schéma principal est défini dans [`sql/001_schema.sql`](sql/001_schema.sql). Les relations essentielles sont :
@@ -73,6 +75,8 @@ Les huit politiques enregistrées, classées par date d’entrée en vigueur :
 | Mise en œuvre irlandaise du taux minimum de 15 % du Pilier Deux | Irlande | 2023-12-31 |
 
 Les dates d’adoption et d’entrée en vigueur sont conservées séparément. Cela importe pour les textes rétroactifs ou les annonces susceptibles d’avoir affecté les décisions avant la mise en œuvre. Le catalogue ne garantit ni que la réforme a le même champ pour toutes les entreprises, ni qu’un indicateur observé l’identifie causalement.
+
+Le dépôt contient aussi le cas de Loudoun County, en Virginie : le plan global de 2019 et l’amendement de zonage « Data Center Standards and Locations » (ZOAM-2020-0001, 2023) sont catalogués comme des jalons distincts. Ils ne font pas partie des huit politiques comptées dans l’instantané PostgreSQL ci-dessus tant que les CSV n’ont pas été importés.
 
 ## 4. Données collectées ou importées et leur recouvrement
 
@@ -206,6 +210,44 @@ ORDER BY s.publisher, i.indicator_code;
 ```
 
 Les scripts réutilisent des identifiants stables pour mettre à jour les observations déjà importées. Les requêtes d’inventaire décrivent la couverture présente ; elles ne prouvent pas que les données des sources catalogue-only sont disponibles ou ouvertes.
+
+## 10. Cas ajouté : Loudoun, Virginie — Data Center Alley
+
+L’onglet **Data Center Alley** présente deux jalons publics à distinguer : le plan global du comté adopté en 2019 et l’amendement de zonage ZOAM-2020-0001 adopté en 2023. Les sources du comté sont cataloguées avec une consigne de vérifier les textes et la date d’effet dans le dossier adopté avant de figer une spécification causale.
+
+Le modèle d’entreprises inclut Amazon.com (ticker AMZN; AWS n’est pas coté séparément) et Equinix (EQIX), avec des expositions **candidates** sans score numérique. Les sources d’infrastructure référencent une empreinte régionale, mais ne valident pas à elles seules la parcelle, l’entité juridique, les dates de fonctionnement ni les effectifs de Loudoun. Les expositions ne sont donc pas des preuves d’emploi ou d’assujettissement local.
+
+Pour charger le cas dans PostgreSQL, importer dans l’ordre les sources, territoires, politiques, entreprises et expositions indiqués au guide de démarrage, puis exécuter les collecteurs :
+
+```powershell
+python scripts/fetch_qcew_local_panel.py --start-year 2017 --end-year 2025
+python scripts/fetch_qcew_state_tax_panel.py --start-year 2017 --end-year 2025
+python scripts/fetch_event_data.py --case loudoun
+python scripts/event_study.py --policy-id policy-loudoun-data-center-zoam-2023 --event-column adoption_date --window-days 5 --index-name "^GSPC"
+python scripts/fetch_gdelt_context.py --case loudoun --start-date 2019-01-01 --end-date 2025-12-31
+```
+
+Le QCEW local fournit emploi privé et salaire hebdomadaire moyen pour Loudoun, Fairfax et Prince William, ainsi que l’industrie NAICS 5182 lorsque les tableaux publics la publient. Les observations de cette industrie sont un **proxy sectoriel**, pas le total des emplois de centres de données ni celui d’Amazon/Equinix. Fairfax et Prince William peuvent subir des effets de débordement : ce sont des comparateurs descriptifs, pas des témoins non traités validés. Le QCEW d’État ajoute Virginia pour replacer les salaires dans le contexte de l’État.
+
+La commande `event_study.py` calcule un CAR descriptif d’AMZN/EQIX par rapport au S&P 500 dans une fenêtre de cinq séances autour de l’adoption de 2023. Ces cours Yahoo Finance sont des résultats consolidés et ne permettent pas d’isoler une contribution locale. La série GDELT mesure un volume brut d’articles selon une requête qui peut contenir du bruit, pas la tonalité ou l’impact médiatique. La table `company_indicators` reste le lieu prévu pour des effectifs et rémunérations locaux vérifiés; aucun chiffre de ce type n’est fabriqué.
+
+Une piste plus récente à étudier est l’annonce Microsoft de mai 2024 à Mount Pleasant, Wisconsin. L’annonce d’investissement (3,3 Md USD) ne constitue pas à elle seule une décision publique locale. Pour en faire un cas causal, il faut identifier séparément les décisions de zonage/permis municipaux et les mesures fiscales de l’État, puis sourcer leurs dates et périmètres.
+
+## 11. Cas législatif : exonération fiscale des centres de données en Virginie
+
+Un onglet distinct du tableau de bord documente le § 58.1-609.3(18) du Code de Virginie, qui prévoit une exonération conditionnelle de la taxe de vente et d’usage sur certains achats d’équipements et logiciels de centres de données du 1er juillet 2010 au 30 juin 2035. La règle générale porte sur au moins 150 M$ d’investissement, 50 nouveaux emplois payés au moins 1,5 fois le salaire moyen local et un protocole d’accord avec la VEDP; des règles propres à certaines localités peuvent modifier les seuils. La date d’adoption historique n’est pas renseignée comme si elle était vérifiée.
+
+Les sociétés candidates enregistrées sont Amazon/AWS, Microsoft, Alphabet/Google et Equinix. Leur présence régionale ne prouve ni l’éligibilité à l’exonération, ni le dépôt d’un MOU, ni des effectifs locaux attribuables à la mesure. Aucun score d’exposition n’est attribué. Les données QCEW disponibles pour ce cas commencent en 2015 : elles décrivent uniquement la période postérieure à la mise en vigueur. L’indicateur NAICS 5182 est un proxy sectoriel; les séries d’emploi et de salaires de Virginia sont agrégées à l’échelle de l’État. Les rapports biennaux agrégés prévus par la loi ne sont pas encore chargés dans la base.
+
+Après l’import des sources, territoires, politique, entreprises et expositions des CSV (étape 7 du [guide de démarrage](./README_FR.md)), les collecteurs se lancent ainsi depuis `glpid_simple_starter` :
+
+```powershell
+python scripts/fetch_qcew_local_panel.py --start-year 2015 --end-year 2025
+python scripts/fetch_qcew_state_tax_panel.py --start-year 2015 --end-year 2025
+python scripts/fetch_event_data.py --case va-data-center
+```
+
+Le dernier collecteur récupère les cours globaux d’AMZN, MSFT, GOOG, EQIX et du S&P 500 de janvier 2010 à mars 2011. Leur évolution autour du 1er juillet 2010 est descriptive et ne peut pas identifier une réaction à la loi, encore moins un résultat financier local.
 
 ## 9. Fichiers de référence dans le dépôt
 
