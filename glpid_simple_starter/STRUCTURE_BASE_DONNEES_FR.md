@@ -1,28 +1,32 @@
 # Guide de la base GLPID : structure, contenu, sources et couverture
 
-**État des lieux vérifié le 1er novembre 2026.** Ce document décrit la base PostgreSQL configurée dans `.env` à cette date. Les quantités ci-dessous sont un instantané : elles changent quand un collecteur est relancé ou que des données sont ajoutées.
+**État des lieux vérifié le 4 novembre 2026.** Ce document décrit la base PostgreSQL configurée dans `.env` après l’ajout des cas de fiscalité numérique et de devoir de vigilance. Les quantités ci-dessous sont un instantané : elles changent quand un collecteur est relancé ou que des données sont ajoutées.
 
 ## 1. En bref : ce que contient la base
 
 | Élément | Lignes | À comprendre |
 |---|---:|---|
-| Territoires | 56 | Pays, États, villes, comtés, régions et géographies de comparaison. |
-| Sources | 42 | Sources documentaires et jeux de données : certaines sont effectivement liées à des observations, d’autres sont seulement référencées dans le catalogue. |
-| Changements de politique | 8 | Réformes fiscales documentées avec leurs dates et leur territoire. |
-| Indicateurs territoriaux | 7 351 | Séries économiques, taux légaux, résultats publiés, ou volumes d’articles, associés à une période, une géographie et une source. |
-| Entreprises | 29 | Entreprises candidates regroupées autour de plusieurs réformes ; ce n’est pas un échantillon de traitement validé. |
-| Expositions d’entreprises | 29 | Une fiche d’exposition par entreprise, toutes de type « siège social » ; ces fiches ne prouvent pas qu’une entreprise est effectivement assujettie à une taxe donnée. |
+| Territoires | 66 | Pays, États, villes, comtés, régions et géographies de comparaison. |
+| Sources | 79 | Sources documentaires et jeux de données : certaines sont effectivement liées à des observations, d’autres sont seulement référencées dans le catalogue. |
+| Changements de politique | 10 | Réformes fiscales et jalons réglementaires documentés avec leurs dates et leur territoire. |
+| Indicateurs territoriaux | 11 033 | Séries économiques, taux légaux, résultats publiés, ou volumes d’articles, associés à une période, une géographie et une source. |
+| Entreprises | 35 | Entreprises candidates regroupées autour de plusieurs réformes ; ce n’est pas un échantillon de traitement validé. |
+| Expositions d’entreprises | 35 | 29 fiches « siège social » et 6 d’opérations candidates ; elles ne prouvent pas qu’une entreprise est effectivement assujettie à une taxe donnée. |
 | Indicateurs d’entreprises | 0 | Aucun chiffre d’affaires, bénéfice, salaire, effectif ou impôt local d’entreprise n’est chargé dans cette table. |
-| Cours boursiers d’entreprises | 15 027 | Prix journaliers pour 29 entreprises, principalement des cours boursiers globaux, pas des résultats locaux. |
-| Cours d’indices de marché | 3 046 | Observations journalières de quatre indices de référence. |
+| Cours boursiers d’entreprises | 16 661 | Prix journaliers pour 35 entreprises, principalement des cours boursiers globaux, pas des résultats locaux. |
+| Cours d’indices de marché | 3 549 | Observations journalières de quatre indices de référence. |
+| Cas de diffusion réglementaire | 12 | Cas dans six familles, aux États-Unis et dans plusieurs pays européens. |
+| Lignes de chronologie (cas–événement) | 46 | Propositions, adoptions, vetos et textes successeurs avec source officielle ; un même instrument peut être relié à plusieurs cas. |
+| Vérifications des sources du pilote | 30 | 12 réponses HTTP 200, 10 réponses HTTP 403 et 8 réponses HTTP 202 (gateway, document non vérifié). |
+| Attention GDELT de l’étude | 24 | Volumes mensuels pour le droit à la réparation, de janvier 2019 à décembre 2020 ; les autres tranches et les deux nouvelles familles restent à collecter. |
 
-La taille PostgreSQL constatée est d’environ **25 Mo**. Les données sont donc un prototype de recherche structuré, pas un recensement exhaustif des entreprises, des ventes locales ou de toutes les réformes fiscales.
+La taille PostgreSQL constatée est d’environ **30 Mo**. Les données sont donc un prototype de recherche structuré, pas un recensement exhaustif des entreprises, des ventes locales ou de toutes les réformes fiscales.
 
-**Note sur le cas ajouté au dépôt :** la photographie PostgreSQL ci-dessus précède l’ajout de Loudoun. Le nouvel onglet et les collecteurs décrits en section 10 sont disponibles dans le code, mais les nouvelles observations n’apparaissent dans la base qu’après import/exécution des commandes indiquées.
+Les 12 cas, les 46 événements de diffusion et les premières 24 observations GDELT sont une extension pilote documentée dans [policy_spillover_study/README_FR.md](policy_spillover_study/README_FR.md). Elle couvre six États pour le CCPA, plusieurs pays pour la fiscalité numérique et les lois de diligence, ainsi qu’un jalon supranational de l’UE. Le collecteur GDELT s’est arrêté sur HTTP 429 après les tranches 2019 et 2020 du droit à la réparation ; les observations déjà importées sont conservées et les tranches complètes sont ignorées à la reprise.
 
 ## 2. Comment le schéma est organisé
 
-Le schéma principal est défini dans [`sql/001_schema.sql`](sql/001_schema.sql). Les relations essentielles sont :
+Le schéma principal est défini dans [`sql/001_schema.sql`](sql/001_schema.sql). Les tables du pilote de diffusion sont ajoutées par [`policy_spillover_study/sql/003_policy_diffusion.sql`](policy_spillover_study/sql/003_policy_diffusion.sql); la migration `004_national_diffusion_level.sql` distingue aussi les lois nationales des règles infranationales et internationales. Les relations essentielles sont :
 
 ```text
 territories ──< policy_changes >── sources
@@ -33,6 +37,10 @@ territories ──< policy_changes >── sources
      │                             ├──< company_indicators >── sources
      │                             └──< company_prices >────── sources
      └── parent_territory_id         market_index_prices ───── sources
+
+policy_diffusion_cases ──< policy_diffusion_events >── territories / sources
+         └──< policy_diffusion_attention >─────────── sources
+sources ──< policy_diffusion_source_checks
 ```
 
 Les principales tables :
@@ -48,6 +56,10 @@ Les principales tables :
 | `company_indicators` | Résultats d’entreprise datés, localisés et sourcés : chiffre d’affaires, emploi, rémunération, impôt, etc. Cette table est actuellement vide. |
 | `company_prices` | Cours boursiers journaliers et rendements dérivés. Ils reflètent le marché et l’entreprise consolidée, pas nécessairement les résultats du site local touché par une réforme. |
 | `market_index_prices` | Séries d’indices journaliers servant de référence pour une étude événementielle sur les actions. |
+| `policy_diffusion_cases` | Ancre d’un cas, famille, date, niveau cible, requête GDELT et limites d’interprétation. Les familles incluent la fiscalité numérique et le devoir de vigilance des entreprises, en plus des cas américains. |
+| `policy_diffusion_events` | Chronologie sourcée des projets, propositions, adoptions, vetos et textes successeurs aux niveaux local, fédéré, national ou supranational ; les analogues partiels sont explicitement distingués. |
+| `policy_diffusion_attention` | Volumes mensuels GDELT par famille de politiques, requête utilisée et provenance. La collecte est partielle : les années déjà complètes sont conservées et ignorées à la reprise. |
+| `policy_diffusion_source_checks` | Historique des contrôles HTTP des pages officielles (statut, URL finale et métadonnées). Une réponse 202 ou 403 ne valide pas le texte de loi. |
 
 Les relations utilisent des identifiants stables et des clés étrangères. Pour chaque observation, `source_id` indique la source, `period_start` et `period_end` la période, `unit` l’unité et `geographic_scope` le niveau géographique. Les champs `notes` et `source_page` apportent le contexte nécessaire pour ne pas confondre des séries de périmètres différents.
 
@@ -61,10 +73,11 @@ Les vues SQL de [`sql/002_views.sql`](sql/002_views.sql) facilitent la lecture :
 
 ## 3. Les réformes déjà cataloguées
 
-Les huit politiques enregistrées, classées par date d’entrée en vigueur :
+Les dix politiques enregistrées, classées par date d’entrée en vigueur :
 
 | Réforme | Territoire | Entrée en vigueur |
 |---|---|---:|
+| Exonération conditionnelle de taxe sur les équipements de centres de données | Virginie | 2010-07-01 |
 | Taxe sur les boissons sucrées de Philadelphia | Philadelphia | 2017-01-01 |
 | Réduction du taux fédéral d’impôt sur les sociétés à 21 % (TCJA) | États-Unis | 2018-01-01 |
 | Surtaxe temporaire de l’impôt sur les sociétés pour les contribuables à hauts revenus | État de New York | 2021-01-01 |
@@ -72,11 +85,12 @@ Les huit politiques enregistrées, classées par date d’entrée en vigueur :
 | Taux normal d’impôt sur les sociétés porté à 25 % | France | 2022-01-01 |
 | Réduction progressive du taux d’impôt sur les sociétés | Pennsylvanie | 2023-01-01 |
 | Taux principal de l’impôt sur les sociétés porté à 25 % | Royaume-Uni | 2023-04-01 |
+| Amendement de zonage « Data Center Standards and Locations » | Loudoun County, Virginie | 2023-12-06 |
 | Mise en œuvre irlandaise du taux minimum de 15 % du Pilier Deux | Irlande | 2023-12-31 |
 
 Les dates d’adoption et d’entrée en vigueur sont conservées séparément. Cela importe pour les textes rétroactifs ou les annonces susceptibles d’avoir affecté les décisions avant la mise en œuvre. Le catalogue ne garantit ni que la réforme a le même champ pour toutes les entreprises, ni qu’un indicateur observé l’identifie causalement.
 
-Le dépôt contient aussi le cas de Loudoun County, en Virginie : le plan global de 2019 et l’amendement de zonage « Data Center Standards and Locations » (ZOAM-2020-0001, 2023) sont catalogués comme des jalons distincts. Ils ne font pas partie des huit politiques comptées dans l’instantané PostgreSQL ci-dessus tant que les CSV n’ont pas été importés.
+Le plan global de Loudoun adopté en 2019 est un jalon distinct du zonage de 2023 et n’est pas compté comme une politique dans la base. Les deux exemples Loudoun et l’exonération de Virginie sont déjà présents dans l’instantané PostgreSQL.
 
 ## 4. Données collectées ou importées et leur recouvrement
 
@@ -84,7 +98,7 @@ Le dépôt contient aussi le cas de Loudoun County, en Virginie : le plan global
 
 | Source effectivement utilisée | Contenu en base | Période et géographie | Ce que cela mesure / limites |
 |---|---|---|---|
-| **BLS QCEW** — collecteurs `fetch_qcew_state_tax_panel.py` et `fetch_qcew_local_panel.py` | **6 418 observations** d’emploi privé et de salaires hebdomadaires, tous secteurs et secteurs sélectionnés | 2015–2025 ; 7 États et 6 comtés de l’État de Washington | Emploi et rémunérations au niveau d’un État ou d’un comté, pas d’une entreprise. King County sert de proxy imparfait pour Seattle. Le titre source dans le catalogue mentionne « state-level », alors que les données incluent aussi les comtés de Washington. |
+| **BLS QCEW** — collecteurs `fetch_qcew_state_tax_panel.py` et `fetch_qcew_local_panel.py` | **10 100 observations** d’emploi privé et de salaires hebdomadaires, tous secteurs et secteurs sélectionnés | 2015–2025 ; 7 États et 6 comtés de l’État de Washington | Emploi et rémunérations au niveau d’un État ou d’un comté, pas d’une entreprise. King County sert de proxy imparfait pour Seattle. Le titre source dans le catalogue mentionne « state-level », alors que les données incluent aussi les comtés de Washington. |
 | **Eurostat, API de diffusion, `lfsi_emp_q`** — `fetch_eurostat_employment_panel.py` | **768 observations** | 16 pays, du T1 2014 au T4 2025 | Emploi total, deux sexes, 15–74 ans, CVS, en milliers de personnes. Résultat national, pas emploi des sociétés assujetties. |
 | **ONS, Labour Force Survey** — même collecteur | **25 observations** | Royaume-Uni, T1 2019–T1 2025 | Emploi national CVS des 16 ans et plus, en milliers. Périmètre d’âge différent d’Eurostat. |
 | **BLS, Current Population Survey (CPS)** — même collecteur | **47 observations** | États-Unis, T1 2014–T3 2025 | Moyenne trimestrielle du niveau mensuel d’emploi CVS des 16 ans et plus, en milliers. Le T4 2025 n’a pas été calculé à partir d’un trimestre partiel. |
@@ -117,24 +131,26 @@ Un taux légal n’est pas le taux effectif réellement payé par une entreprise
 
 ### Entreprises, expositions et cours
 
-Les 29 entreprises candidates représentent 15 sociétés américaines, 5 britanniques, 4 irlandaises et 5 françaises. Elles ont 29 fiches d’exposition de type **siège social** ; les expositions ne sont pas une mesure vérifiée de la part de leurs ventes, bénéfices, salariés ou impôts qui est concernée par chaque réforme.
+La base comprend 35 entreprises candidates, avec 35 fiches d’exposition : 29 de type **siège social** et 6 **opérations** candidates associées aux cas de centres de données. Les expositions ne sont pas une mesure vérifiée de la part des ventes, bénéfices, salariés ou impôts qui est concernée par chaque réforme.
 
 Les données de marché proviennent de l’endpoint de cours historiques Yahoo Finance utilisé par `fetch_event_data.py` :
 
-- 15 027 cours journaliers pour 29 entreprises, du 1er août 2017 au 30 avril 2024 selon les périodes propres à chaque entreprise ;
-- 3 046 observations pour quatre indices : S&P 500 (`^GSPC`), FTSE (`^FTSE`), CAC 40 (`^FCHI`) et ISEQ (`^ISEQ`).
+- 16 661 cours journaliers pour 35 entreprises, du 4 janvier 2010 au 30 avril 2024 selon les périodes propres à chaque entreprise ;
+- 3 549 observations pour quatre indices : S&P 500 (`^GSPC`), FTSE (`^FTSE`), CAC 40 (`^FCHI`) et ISEQ (`^ISEQ`).
 
 Ces historiques servent à des études événementielles sur les rendements boursiers. Une réaction boursière autour d’une date ne mesure ni les ventes locales ni l’effet causal d’une réforme sur l’activité locale. La source Yahoo Finance est un endpoint de données de marché, avec des conditions d’accès et de réutilisation à vérifier ; ce n’est pas un registre comptable officiel.
 
 ## 5. Sources : données téléchargées versus catalogue documentaire
 
-La table `sources` contient **42 références**, mais il faut distinguer trois situations :
+La table `sources` contient **63 références**, mais il faut distinguer trois situations :
 
 1. **Séries effectivement téléchargées par des collecteurs** : Eurostat, ONS, BLS CPS, BLS QCEW, GDELT DOC API et Yahoo Finance. Les lignes correspondantes sont reliées à des observations ; les commandes ci-dessous permettent de les recharger, sous réserve de disponibilité des API et de leurs conditions d’accès.
 2. **Résultats publiés importés** : JAMA pour Philadelphia. Les nombres agrégés ont été transcrits depuis l’article ; les données propriétaires IRI n’ont pas été téléchargées.
 3. **Références de lois, organismes et bases potentielles** : par exemple Légifrance, Congrès américain, Pennsylvania General Assembly, New York Senate, UK Parliament, Irish Revenue, INPI, Companies House, SEC/EDGAR, GLEIF, OECD, IMF, OpenAlex, OpenCorporates et registres de brevets. Certaines références légales sont liées à une réforme ou à un taux déjà enregistré ; beaucoup d’autres sont uniquement dans le catalogue. Leur présence ne signifie pas que leurs jeux de données ont été collectés.
 
-Les sources officielles reliées aux huit réformes incluent les textes ou pages de l’Assemblée législative de Pennsylvanie, du Congrès américain, de New York, de Légifrance, du Parlement britannique, du gouvernement/Revenue irlandais, de la Ville de Seattle et de Philadelphia. Les sources fiscales administratives fournissent aussi des valeurs légales ponctuelles. La provenance ligne par ligne s’affiche dans l’onglet **Sources et données** du tableau de bord.
+Les sources officielles reliées aux réformes incluent les textes ou pages de l’Assemblée législative de Pennsylvanie, du Congrès américain, de New York, de Légifrance, du Parlement britannique, du gouvernement/Revenue irlandais, de la Ville de Seattle, de Philadelphia et des juridictions des cas Loudoun/Virginie. Les nouvelles sources du pilote comprennent California AB 375, Virginia SB 1392, Colorado SB21-190 et Utah SB 227. La provenance ligne par ligne s’affiche dans l’interface de l’étude.
+
+Pour les 30 URL du pilote de diffusion vérifiées, douze ont renvoyé HTTP 200. Dix ont refusé l’accès automatisé (403) et huit URL EUR-Lex ont renvoyé HTTP 202 depuis une passerelle ; ces réponses sont enregistrées comme non vérifiées et ne confirment pas le contenu des textes.
 
 Les collecteurs ne sont pas tous des « scraping » de pages HTML : ils appellent des API officielles ou des fichiers CSV/JSON publiés. Cette distinction permet de savoir si une donnée est un téléchargement reproductible, une valeur extraite d’une publication, une donnée de marché ou une simple référence documentaire.
 
@@ -145,6 +161,7 @@ Les collecteurs ne sont pas tous des « scraping » de pages HTML : ils appellen
 - **Préparer et estimer une DiD exploratoire** avec séries QCEW ou emploi national lorsque les périodes, unités et indicateurs sont compatibles, et que les territoires témoins sont sélectionnés.
 - **Étudier un événement boursier** autour d’une annonce, d’une adoption ou d’une entrée en vigueur, en comparant les rendements d’actions à un indice.
 - **Consigner les sources et résultats publiés**, comme le cas Philadelphia, sans présenter les résultats cités comme une nouvelle estimation produite par GLPID.
+- **Explorer un pilote de diffusion réglementaire** avec douze cas de transparence salariale, réparation, confidentialité, IA, fiscalité numérique et devoir de vigilance, puis suivre les adoptions temporelles aux niveaux national, supranational et fédéré. Le pilote ne permet pas d’estimer un modèle prédictif.
 - **Préparer des extensions** avec des comptes statutaires, des offres d’emploi, des données de salaire ou d’effectifs au niveau établissement, des expositions d’entreprise mieux documentées, ou des microdonnées accessibles sous licence.
 
 Le code contient également des fonctions statistiques pour une DiD intra-entreprise entre lieux, une DiD à intensité d’exposition continue et une RDD autour d’un seuil. Elles nécessitent des données au niveau entreprise/site/salarié et une mesure d’exposition ou de seuil adaptée ; elles ne sont pas alimentées automatiquement par les séries actuellement présentes. Leur présence dans le code ne signifie donc pas que ces analyses sont déjà estimables dans cette base.
@@ -157,6 +174,7 @@ Le code contient également des fonctions statistiques pour une DiD intra-entrep
 - **Périmètres hétérogènes** : emploi CVS/non CVS, classes d’âge et niveaux de géographie diffèrent ; des séries du même nom ne sont pas automatiquement comparables.
 - **Témoins imparfaits** : un État ou un comté ne représente pas nécessairement un témoin non traité comparable. Plusieurs réformes nationales peuvent toucher aussi les juridictions témoins.
 - **Expositions d’entreprises indicatives** : le siège ne détermine pas les ventes, l’emploi, les bénéfices imposables ou l’assujettissement local.
+- **Diffusion législative non exhaustive** : les 46 événements sourcés couvrent douze cas sélectionnés dans six familles. Les cas de confidentialité partagent plusieurs textes et ne sont pas indépendants. Les cartes des États-Unis et du monde n’affichent que les juridictions documentées; les territoires absents ne sont pas considérés comme dépourvus de loi. Les adoptions ultérieures ne prouvent pas une influence, et l’absence d’un événement n’est pas une non-adoption vérifiée.
 - **Pas de géométries** : la base stocke les noms et relations parent/enfant, pas les polygones nécessaires à une carte précise.
 - **Une estimation statistique n’établit pas à elle seule une causalité** : il faut documenter les tendances préalables, les chocs concomitants, la sélection des témoins, les changements de mesure et les erreurs-types.
 

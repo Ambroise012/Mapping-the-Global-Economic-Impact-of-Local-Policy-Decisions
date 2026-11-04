@@ -317,6 +317,12 @@ python scripts/fetch_gdelt_context.py --case loudoun --start-date 2019-01-01 --e
 
 Cette série ne mesure ni l’emploi ni l’impact causal. Le cas Seattle reste la valeur par défaut ; `--case loudoun` utilise une requête séparée sur Loudoun, les centres de données, AWS et Equinix. Les requêtes GDELT sont sensibles aux termes choisis et peuvent inclure des articles hors sujet ; en cas de 429, attendre avant de réessayer et ne pas lancer de boucles de requêtes.
 
+### Étude pilote de diffusion réglementaire
+
+Une extension séparée documente douze cas dans six familles, dont la fiscalité numérique en Europe et le devoir de vigilance des entreprises en France, en Allemagne et dans l’UE, en plus des cas américains de transparence salariale, réparation, confidentialité et IA. Elle fournit des chronologies sourcées et des cartes interactives des États-Unis et du monde. Les analogies et textes successeurs sont explicitement distingués; l’ordre chronologique n’établit pas de causalité. Le pilote est sélectionné et ne permet pas de valider un modèle prédictif. La collecte GDELT reste partielle (24 observations pour le droit à la réparation en 2019–2020); les deux nouvelles familles n’ont pas encore de séries d’attention. SB 1047 est codé comme projet vetoé.
+
+Consultez [policy_spillover_study/README_FR.md](policy_spillover_study/README_FR.md) pour appliquer la migration, charger les cas, récupérer GDELT et lancer l’interface.
+
 ## 11. Résultats locaux et plans causaux
 
 Pour les multinationales, privilégiez les résultats décidés localement : offres d’emploi par site, effectifs et rémunérations, surface et baux, permis/investissements, comptes de la filiale locale et prix ou frais géolocalisés. Les sources possibles incluent Lightcast/Revelio Labs/Indeed, DSN/DADS via CASD, Census LBD/LEHD, CoStar/CBRE, DVF, Placer.ai/SafeGraph et les registres nationaux de comptes. Elles peuvent être payantes, soumises à licence ou à accès sécurisé ; le projet ne les télécharge pas. Documentez la source, la couverture, la période, le site et l’entité juridique. Les données administratives individuelles doivent rester dans leur environnement autorisé et être agrégées conformément aux règles de confidentialité.
